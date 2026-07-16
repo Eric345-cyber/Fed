@@ -26,12 +26,14 @@
         }
         .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(79, 70, 229, 0.4); }
         .btn-primary:active { transform: translateY(0); }
+        .btn-primary:disabled { opacity: 0.5; transform: none; box-shadow: none; }
         .btn-secondary {
             background: rgba(255,255,255,0.05);
             border: 1px solid rgba(255,255,255,0.1);
             transition: all 0.2s;
         }
         .btn-secondary:hover { background: rgba(255,255,255,0.1); }
+        .btn-secondary:disabled { opacity: 0.3; }
         .input-field {
             background: rgba(0, 0, 0, 0.5);
             border: 1px solid rgba(255,255,255,0.1);
@@ -57,6 +59,7 @@
             padding-left: 10px;
             margin: 6px 0;
             font-size: 11px;
+            word-break: break-word;
         }
         .log-entry.success { border-left-color: #22c55e; }
         .log-entry.error { border-left-color: #ef4444; }
@@ -76,11 +79,13 @@
         .collapsible-content.open { max-height: 3000px; }
         .chevron { transition: transform 0.2s; }
         .chevron.open { transform: rotate(180deg); }
-        .wallet-icon {
-            width: 48px; height: 48px;
-            border-radius: 12px;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 20px;
+        .wallet-option {
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .wallet-option:hover {
+            background: rgba(99, 102, 241, 0.1);
+            border-color: rgba(99, 102, 241, 0.3);
         }
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -111,15 +116,61 @@
                 </div>
             </div>
 
-            <button id="connectBtn" class="btn-primary w-full py-3.5 rounded-xl font-semibold text-white text-sm">
+            <button id="connectBtn" class="btn-primary w-full py-3.5 rounded-xl font-semibold text-white text-sm mb-2">
                 Connect via WalletConnect
             </button>
 
+            <!-- Wallet Selector Modal -->
+            <div id="walletModal" class="hidden mt-3 p-3 rounded-xl bg-black/40 border border-white/5">
+                <p class="text-xs text-gray-400 mb-2 text-center">Choose your wallet</p>
+                <div class="space-y-2">
+                    <div class="wallet-option p-3 rounded-xl border border-white/5 flex items-center gap-3" onclick="connectWallet('metamask')">
+                        <div class="w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center text-lg">🦊</div>
+                        <div>
+                            <p class="text-sm font-medium text-white">MetaMask</p>
+                            <p class="text-[10px] text-gray-500">Mobile app via deep link</p>
+                        </div>
+                    </div>
+                    <div class="wallet-option p-3 rounded-xl border border-white/5 flex items-center gap-3" onclick="connectWallet('rabby')">
+                        <div class="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center text-lg">🐰</div>
+                        <div>
+                            <p class="text-sm font-medium text-white">Rabby</p>
+                            <p class="text-[10px] text-gray-500">Mobile wallet</p>
+                        </div>
+                    </div>
+                    <div class="wallet-option p-3 rounded-xl border border-white/5 flex items-center gap-3" onclick="connectWallet('rainbow')">
+                        <div class="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center text-lg">🌈</div>
+                        <div>
+                            <p class="text-sm font-medium text-white">Rainbow</p>
+                            <p class="text-[10px] text-gray-500">Mobile wallet</p>
+                        </div>
+                    </div>
+                    <div class="wallet-option p-3 rounded-xl border border-white/5 flex items-center gap-3" onclick="connectWallet('other')">
+                        <div class="w-10 h-10 rounded-lg bg-gray-500/20 flex items-center justify-center text-lg">🔗</div>
+                        <div>
+                            <p class="text-sm font-medium text-white">Other Wallet</p>
+                            <p class="text-[10px] text-gray-500">Any WalletConnect v2 compatible</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- QR Section for desktop fallback -->
             <div id="qrSection" class="hidden mt-4 text-center">
-                <p class="text-xs text-gray-400 mb-3">Scan with MetaMask mobile</p>
+                <p class="text-xs text-gray-400 mb-2">Scan with your wallet app</p>
                 <div id="qrCode" class="qr-container mx-auto"></div>
-                <p class="text-xs text-gray-500 mt-3">Or tap deep link below</p>
-                <a id="deepLink" href="#" class="text-xs text-indigo-400 underline mt-1 block">Open in MetaMask</a>
+                <p class="text-xs text-gray-500 mt-2">Session will expire in 5 minutes</p>
+            </div>
+
+            <!-- Deep Link Section -->
+            <div id="deepLinkSection" class="hidden mt-3">
+                <a id="universalLink" href="#" class="btn-primary w-full py-3 rounded-xl font-semibold text-white text-sm text-center block">
+                    Open MetaMask Mobile
+                </a>
+                <p class="text-[10px] text-gray-500 mt-2 text-center">If the button doesn't work, copy the URI below and paste into MetaMask's WalletConnect scanner</p>
+                <div class="mt-2 p-2 rounded-lg bg-black/40 border border-white/5">
+                    <p id="wcUriDisplay" class="mono text-[9px] text-gray-400 break-all"></p>
+                </div>
             </div>
 
             <div id="walletInfo" class="hidden mt-4 p-3 rounded-xl bg-black/40 border border-white/5">
@@ -221,9 +272,6 @@
             <button id="sendCallsBtn" class="btn-primary w-full py-4 rounded-xl font-bold text-white text-sm" disabled>
                 Send wallet_sendCalls
             </button>
-            <button id="sendRawBtn" class="btn-secondary w-full py-2.5 rounded-xl text-xs font-medium mt-2" disabled>
-                Fallback: Raw Type 4 (Advanced)
-            </button>
             <div class="mt-3 p-2.5 rounded-lg bg-black/40 border border-white/5">
                 <p class="text-[10px] text-gray-500 mb-1">Preview:</p>
                 <pre id="txPreview" class="mono text-[10px] text-gray-400 overflow-x-auto">Connect wallet to preview...</pre>
@@ -237,21 +285,22 @@
                 <button onclick="clearLogs()" class="text-[10px] text-gray-500">Clear</button>
             </div>
             <div id="logsContainer" class="max-h-64 overflow-y-auto mono text-xs space-y-1">
-                <div class="log-entry info text-gray-400">Ready. Connect wallet to begin.</div>
+                <div class="log-entry info text-gray-400">Ready. Tap "Connect via WalletConnect" to begin.</div>
             </div>
         </div>
     </div>
 
-    <!-- WalletConnect v2 Provider -->
-    <script type="module">
-        import { EthereumProvider } from "https://unpkg.com/@walletconnect/ethereum-provider@2.11.0/dist/index.es.js";
+    <!-- Load WalletConnect via CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.11.0/dist/umd/index.min.js"></script>
 
+    <script>
         // ─── State ───
         let provider = null;
         let userAddress = null;
         let chainId = null;
         let capabilities = null;
-        let session = null;
+        let selectedWallet = null;
+        let connectionUri = null;
 
         // ─── Utils ───
         const $ = id => document.getElementById(id);
@@ -274,17 +323,34 @@
         const shorten = addr => addr ? addr.slice(0, 6) + '...' + addr.slice(-4) : '—';
         const toHex = n => '0x' + BigInt(n).toString(16);
 
-        // ─── QR Code Generator (simple) ───
+        // ─── QR Generator ───
         function generateQR(uri) {
-            // Use a simple QR API
             const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(uri)}`;
             const img = document.createElement('img');
             img.src = qrUrl;
-            img.width = 200;
-            img.height = 200;
+            img.width = 180;
+            img.height = 180;
             img.alt = 'WalletConnect QR';
+            img.style.display = 'block';
+            img.style.margin = '0 auto';
             $('qrCode').innerHTML = '';
             $('qrCode').appendChild(img);
+        }
+
+        // ─── Deep Link Generators ───
+        function getDeepLink(wallet, uri) {
+            const encodedUri = encodeURIComponent(uri);
+            switch(wallet) {
+                case 'metamask':
+                    // MetaMask universal link format
+                    return `https://metamask.app.link/wc?uri=${encodedUri}`;
+                case 'rabby':
+                    return `rabby://wc?uri=${encodedUri}`;
+                case 'rainbow':
+                    return `https://rnbwapp.com/wc?uri=${encodedUri}`;
+                default:
+                    return `wc:${uri}`;
+            }
         }
 
         // ─── Call Management ───
@@ -359,15 +425,32 @@
             $('txPreview').textContent = JSON.stringify(preview, null, 2);
         }
 
-        // ─── Connect via WalletConnect ───
-        $('connectBtn').addEventListener('click', async () => {
-            log('Initializing WalletConnect v2...');
+        // ─── Connect Button ───
+        $('connectBtn').addEventListener('click', () => {
+            $('walletModal').classList.remove('hidden');
+            log('Select your wallet from the list');
+        });
+
+        // ─── Wallet Selection ───
+        window.connectWallet = async function(walletType) {
+            selectedWallet = walletType;
+            $('walletModal').classList.add('hidden');
             $('connectBtn').disabled = true;
-            $('connectBtn').textContent = 'Connecting...';
+            $('connectBtn').textContent = 'Initializing...';
+
+            log(`Selected wallet: ${walletType}`);
 
             try {
-                provider = await EthereumProvider.init({
-                    projectId: 'eip7702_test_dapp', // Using a placeholder; in production get one from cloud.walletconnect.com
+                // Check if WalletConnect EthereumProvider is available
+                if (!window.EthereumProvider) {
+                    throw new Error('WalletConnect library not loaded. Check your connection.');
+                }
+
+                log('Creating WalletConnect provider...');
+
+                // Using the UMD build from CDN
+                provider = await window.EthereumProvider.init({
+                    projectId: 'eip7702_test_dapp', // Free project ID for testing
                     chains: [1],
                     methods: [
                         'eth_sendTransaction',
@@ -377,38 +460,84 @@
                         'eth_signTypedData_v4',
                         'wallet_getCapabilities',
                         'wallet_sendCalls',
-                        'wallet_getCallsStatus'
+                        'wallet_getCallsStatus',
+                        'eth_getBalance'
                     ],
                     events: ['chainChanged', 'accountsChanged'],
-                    showQrModal: false // We'll handle QR ourselves
+                    showQrModal: false,
+                    qrModalOptions: {
+                        themeMode: 'dark'
+                    }
                 });
 
-                log('Provider initialized. Requesting connection...');
+                log('Provider created. Setting up listeners...');
 
-                // Listen for URI to show QR
+                // Listen for display_uri event
                 provider.on('display_uri', (uri) => {
-                    log('QR code generated. Scan with MetaMask mobile.', 'info');
-                    $('qrSection').classList.remove('hidden');
-                    generateQR(uri);
-                    $('deepLink').href = `https://metamask.app.wc/?uri=${encodeURIComponent(uri)}`;
+                    connectionUri = uri;
+                    log('Connection URI generated');
+
+                    // On mobile, show deep link
+                    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+                    if (isMobile) {
+                        $('deepLinkSection').classList.remove('hidden');
+                        const deepLink = getDeepLink(walletType, uri);
+                        $('universalLink').href = deepLink;
+                        $('universalLink').textContent = `Open ${walletType.charAt(0).toUpperCase() + walletType.slice(1)}`;
+                        $('wcUriDisplay').textContent = uri;
+
+                        // Auto-redirect for MetaMask
+                        if (walletType === 'metamask') {
+                            log('Redirecting to MetaMask...');
+                            setTimeout(() => {
+                                window.location.href = deepLink;
+                            }, 500);
+                        }
+                    } else {
+                        // On desktop, show QR
+                        $('qrSection').classList.remove('hidden');
+                        generateQR(uri);
+                    }
                 });
 
+                // Listen for connection
+                provider.on('connect', (info) => {
+                    log('WalletConnect session connected!', 'success');
+                });
+
+                provider.on('disconnect', () => {
+                    log('Wallet disconnected', 'warn');
+                    resetConnection();
+                });
+
+                log('Enabling provider...');
                 await provider.enable();
 
-                log('Wallet connected!', 'success');
-                $('qrSection').classList.add('hidden');
+                log('Provider enabled! Getting account info...');
 
                 // Get account info
                 const accounts = provider.accounts;
+                if (!accounts || accounts.length === 0) {
+                    throw new Error('No accounts returned from wallet');
+                }
+
                 userAddress = accounts[0];
                 chainId = provider.chainId;
 
-                // Get balance via provider
-                const balanceHex = await provider.request({
-                    method: 'eth_getBalance',
-                    params: [userAddress, 'latest']
-                });
-                const balance = (Number(balanceHex) / 1e18).toFixed(4);
+                log(`Connected: ${shorten(userAddress)} on chain ${chainId}`, 'success');
+
+                // Get balance
+                let balance = '0.0000';
+                try {
+                    const balanceHex = await provider.request({
+                        method: 'eth_getBalance',
+                        params: [userAddress, 'latest']
+                    });
+                    balance = (Number(balanceHex) / 1e18).toFixed(4);
+                } catch (e) {
+                    log('Could not fetch balance', 'warn');
+                }
 
                 // Update UI
                 $('walletAddress').textContent = userAddress;
@@ -418,16 +547,15 @@
                 $('walletInfo').classList.remove('hidden');
                 $('connectBtn').textContent = 'Connected';
                 $('connectBtn').classList.add('opacity-50');
-
-                log(`Address: ${shorten(userAddress)} | Balance: ${balance} ETH`, 'success');
+                $('qrSection').classList.add('hidden');
+                $('deepLinkSection').classList.add('hidden');
 
                 // Enable buttons
                 $('checkCapsBtn').disabled = false;
                 $('sendCallsBtn').disabled = false;
-                $('sendRawBtn').disabled = false;
 
                 // Auto-check capabilities
-                await checkCapabilities();
+                setTimeout(() => checkCapabilities(), 500);
 
                 if ($('callsContainer').children.length === 0) {
                     loadPreset('simple');
@@ -435,11 +563,32 @@
 
             } catch (err) {
                 log(`Connection failed: ${err.message}`, 'error');
-                console.error(err);
+                console.error('Full error:', err);
                 $('connectBtn').disabled = false;
                 $('connectBtn').textContent = 'Connect via WalletConnect';
+
+                // Show error details
+                if (err.message.includes('projectId')) {
+                    log('You may need a real WalletConnect Project ID from cloud.walletconnect.com', 'warn');
+                }
+                if (err.message.includes('not loaded')) {
+                    log('Try refreshing the page - the WalletConnect library failed to load', 'warn');
+                }
             }
-        });
+        };
+
+        function resetConnection() {
+            provider = null;
+            userAddress = null;
+            chainId = null;
+            $('walletInfo').classList.add('hidden');
+            $('connectBtn').disabled = false;
+            $('connectBtn').textContent = 'Connect via WalletConnect';
+            $('connectBtn').classList.remove('opacity-50');
+            $('checkCapsBtn').disabled = true;
+            $('sendCallsBtn').disabled = true;
+            $('connectionStatus').innerHTML = '<span class="status-dot disconnected"></span>Disconnected';
+        }
 
         // ─── Check Capabilities ───
         async function checkCapabilities() {
@@ -464,13 +613,9 @@
 
                 if (has7702) {
                     log('EIP-7702 supported!', 'success');
-                    const delegator = chainCaps.eip7702?.delegatorAddress;
-                    if (delegator) {
-                        log(`Suggested delegator: ${shorten(delegator)}`, 'info');
-                    }
                 } else {
                     log('EIP-7702 not reported by wallet.', 'warn');
-                    log('This may still work if the wallet handles it internally.', 'info');
+                    log('May still work if wallet handles it internally.', 'info');
                 }
 
             } catch (err) {
@@ -481,7 +626,7 @@
 
         $('checkCapsBtn').addEventListener('click', checkCapabilities);
 
-        // ─── Send Calls (EIP-5792) ───
+        // ─── Send Calls ───
         $('sendCallsBtn').addEventListener('click', async () => {
             if (!provider || !userAddress) { log('Connect wallet first', 'error'); return; }
 
@@ -510,7 +655,7 @@
                     }))
                 };
 
-                log(`Request: ${JSON.stringify(request, null, 2).substring(0, 500)}...`, 'info');
+                log(`Request prepared. Check your wallet for approval prompt.`, 'info');
 
                 const result = await provider.request({
                     method: 'wallet_sendCalls',
@@ -518,9 +663,8 @@
                 });
 
                 log(`Submitted! ID: ${result}`, 'success');
-                log('Check MetaMask mobile for approval prompt.', 'info');
+                log('Check your wallet app for the signing prompt.', 'info');
 
-                // Poll for status
                 pollCallsStatus(result);
 
             } catch (err) {
@@ -539,7 +683,7 @@
 
             const poll = async () => {
                 if (attempts >= maxAttempts) {
-                    log('Polling timed out. Check MetaMask for status.', 'warn');
+                    log('Polling timed out. Check wallet for status.', 'warn');
                     return;
                 }
                 attempts++;
@@ -556,7 +700,7 @@
                         log('Confirmed!', 'success');
                         if (status.receipts?.[0]?.transactionHash) {
                             const hash = status.receipts[0].transactionHash;
-                            log(`<a href="https://etherscan.io/tx/${hash}" target="_blank" class="text-indigo-400 underline">Etherscan: ${shorten(hash)}</a>`, 'success');
+                            log(`Etherscan: ${hash}`, 'success');
                         }
                         return;
                     } else if (status.status === 'FAILED') {
@@ -574,44 +718,14 @@
             poll();
         }
 
-        // ─── Fallback: Raw Type 4 (Advanced) ───
-        $('sendRawBtn').addEventListener('click', async () => {
-            if (!provider || !userAddress) { log('Connect first', 'error'); return; }
-
-            log('Attempting raw Type 4 transaction...', 'warn');
-            log('This requires the wallet to support eth_sendTransaction with type 0x04', 'warn');
-
-            const delegator = $('delegatorAddress').value;
-            const calls = getCalls();
-
-            try {
-                // Try to send a standard transaction first to test connectivity
-                log('Testing with standard eth_sendTransaction...');
-
-                const tx = {
-                    from: userAddress,
-                    to: userAddress,
-                    value: '0x0',
-                    data: '0x',
-                    type: '0x4', // Type 4
-                    // authorizationList would need to be constructed here
-                };
-
-                log('Raw Type 4 not fully implemented in this demo.', 'warn');
-                log('Use wallet_sendCalls above for the supported path.', 'info');
-                log('If wallet_sendCalls fails, the wallet does not support EIP-7702 via WalletConnect yet.', 'warn');
-
-            } catch (err) {
-                log(`Raw tx failed: ${err.message}`, 'error');
-            }
-        });
-
         // ─── Event Listeners ───
         $('addCallBtn').addEventListener('click', () => addCallEntry());
 
         // Initialize
         addCallEntry();
+
+        log('App loaded. Tap "Connect via WalletConnect" to start.');
     </script>
 </body>
-  </html>
-  
+    </html>
+            
