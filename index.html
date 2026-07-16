@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>EIP-7702 Mobile — WalletConnect</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #050508; color: #e2e8f0; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .card {
+            background: rgba(15, 15, 28, 0.9);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+        .gradient-text {
+            background: linear-gradient(135deg, #818cf8 0%, #c084fc 50%, #f472b6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            transition: all 0.2s;
+        }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(79, 70, 229, 0.4); }
+        .btn-primary:active { transform: translateY(0); }
+        .btn-secondary {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: all 0.2s;
+        }
+        .btn-secondary:hover { background: rgba(255,255,255,0.1); }
+        .input-field {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: all 0.2s;
+        }
+        .input-field:focus {
+            border-color: rgba(99, 102, 241, 0.5);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+        .status-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 6px;
+        }
+        .status-dot.connected { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+        .status-dot.disconnected { background: #ef4444; }
+        .status-dot.pending { background: #f59e0b; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        .log-entry {
+            border-left: 2px solid rgba(99, 102, 241, 0.3);
+            padding-left: 10px;
+            margin: 6px 0;
+            font-size: 11px;
+        }
+        .log-entry.success { border-left-color: #22c55e; }
+        .log-entry.error { border-left-color: #ef4444; }
+        .log-entry.info { border-left-color: #3b82f6; }
+        .log-entry.warn { border-left-color: #f59e0b; }
+        .qr-container {
+            background: white;
+            padding: 16px;
+            border-radius: 12px;
+            display: inline-block;
+        }
+        .collapsible-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        .collapsible-content.open { max-height: 3000px; }
+        .chevron { transition: transform 0.2s; }
+        .chevron.open { transform: rotate(180deg); }
+        .wallet-icon {
+            width: 48px; height: 48px;
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px;
+        }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.3); border-radius: 2px; }
+    </style>
+</head>
+<body class="min-h-screen pb-20">
+    <div class="max-w-lg mx-auto px-4 py-6">
+        <!-- Header -->
+        <div class="text-center mb-6">
+            <h1 class="text-2xl font-bold gradient-text">EIP-7702 Mobile</h1>
+            <p class="text-gray-500 text-xs mt-1">WalletConnect v2 + MetaMask Mobile</p>
+            <div class="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+                MAINNET — Real ETH
+            </div>
+        </div>
+
+        <!-- Step 1: Connect -->
+        <div class="card rounded-2xl p-5 mb-4">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-sm font-semibold text-white flex items-center gap-2">
+                    <span class="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-xs font-bold">1</span>
+                    Connect Wallet
+                </h2>
+                <div id="connectionStatus" class="flex items-center text-xs text-gray-500">
+                    <span class="status-dot disconnected"></span>Disconnected
+                </div>
+            </div>
+
+            <button id="connectBtn" class="btn-primary w-full py-3.5 rounded-xl font-semibold text-white text-sm">
+                Connect via WalletConnect
+            </button>
+
+            <div id="qrSection" class="hidden mt-4 text-center">
+                <p class="text-xs text-gray-400 mb-3">Scan with MetaMask mobile</p>
+                <div id="qrCode" class="qr-container mx-auto"></div>
+                <p class="text-xs text-gray-500 mt-3">Or tap deep link below</p>
+                <a id="deepLink" href="#" class="text-xs text-indigo-400 underline mt-1 block">Open in MetaMask</a>
+            </div>
+
+            <div id="walletInfo" class="hidden mt-4 p-3 rounded-xl bg-black/40 border border-white/5">
+                <div class="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                        <span class="text-gray-500">Address</span>
+                        <p id="walletAddress" class="mono text-indigo-300 truncate">—</p>
+                    </div>
+                    <div>
+                        <span class="text-gray-500">Chain</span>
+                        <p id="walletChain" class="mono text-indigo-300">—</p>
+                    </div>
+                    <div>
+                        <span class="text-gray-500">Balance</span>
+                        <p id="walletBalance" class="mono text-green-400">—</p>
+                    </div>
+                    <div>
+                        <span class="text-gray-500">7702</span>
+                        <p id="wallet7702" class="mono text-amber-400">—</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 2: Capabilities -->
+        <div class="card rounded-2xl p-5 mb-4">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-sm font-semibold text-white flex items-center gap-2">
+                    <span class="w-5 h-5 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center text-xs font-bold">2</span>
+                    Check Capabilities
+                </h2>
+                <button id="checkCapsBtn" class="btn-secondary px-3 py-1.5 rounded-lg text-xs font-medium" disabled>
+                    Check
+                </button>
+            </div>
+            <div id="capsResult" class="hidden">
+                <pre id="capsJson" class="mono text-[10px] text-gray-400 bg-black/40 p-3 rounded-lg overflow-x-auto"></pre>
+            </div>
+        </div>
+
+        <!-- Step 3: Delegation Config -->
+        <div class="card rounded-2xl p-5 mb-4">
+            <div class="flex items-center justify-between mb-3 cursor-pointer" onclick="toggleSection('delegationConfig')">
+                <h2 class="text-sm font-semibold text-white flex items-center gap-2">
+                    <span class="w-5 h-5 rounded-full bg-pink-500/20 text-pink-400 flex items-center justify-center text-xs font-bold">3</span>
+                    Delegation Config
+                </h2>
+                <svg id="delegationConfigChevron" class="chevron w-4 h-4 text-gray-500 open" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </div>
+            <div id="delegationConfig" class="collapsible-content open">
+                <div class="space-y-3">
+                    <div>
+                        <label class="text-xs text-gray-500 mb-1 block">Delegator Contract</label>
+                        <input id="delegatorAddress" type="text" 
+                            class="input-field w-full px-3 py-2.5 rounded-xl mono text-xs text-white"
+                            value="0xcA11bde05977b3631167028862bE2a173976CA11"
+                            placeholder="0x...">
+                        <p class="text-[10px] text-gray-600 mt-1">Default: Multicall3. Replace with your contract.</p>
+                    </div>
+                    <div class="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                        <p class="text-[10px] text-amber-300 leading-relaxed">
+                            <strong>Warning:</strong> The delegated contract gains execution power over your EOA for that transaction. Only use trusted, audited contracts.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 4: Call Builder -->
+        <div class="card rounded-2xl p-5 mb-4">
+            <div class="flex items-center justify-between mb-3 cursor-pointer" onclick="toggleSection('callBuilder')">
+                <h2 class="text-sm font-semibold text-white flex items-center gap-2">
+                    <span class="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-xs font-bold">4</span>
+                    Call Builder
+                </h2>
+                <svg id="callBuilderChevron" class="chevron w-4 h-4 text-gray-500 open" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </div>
+            <div id="callBuilder" class="collapsible-content open">
+                <div id="callsContainer" class="space-y-2"></div>
+                <button id="addCallBtn" class="btn-secondary w-full py-2.5 rounded-xl text-xs font-medium mt-2">
+                    + Add Call
+                </button>
+                <div class="mt-3 flex gap-2 flex-wrap">
+                    <button onclick="loadPreset('simple')" class="px-2.5 py-1 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-300 text-[10px]">Simple</button>
+                    <button onclick="loadPreset('batchTransfer')" class="px-2.5 py-1 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-300 text-[10px]">Batch ETH</button>
+                    <button onclick="loadPreset('approve')" class="px-2.5 py-1 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-300 text-[10px]">Approve</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 5: Execute -->
+        <div class="card rounded-2xl p-5 mb-4 border-green-500/20">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-sm font-semibold text-white flex items-center gap-2">
+                    <span class="w-5 h-5 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center text-xs font-bold">5</span>
+                    Execute
+                </h2>
+            </div>
+            <button id="sendCallsBtn" class="btn-primary w-full py-4 rounded-xl font-bold text-white text-sm" disabled>
+                Send wallet_sendCalls
+            </button>
+            <button id="sendRawBtn" class="btn-secondary w-full py-2.5 rounded-xl text-xs font-medium mt-2" disabled>
+                Fallback: Raw Type 4 (Advanced)
+            </button>
+            <div class="mt-3 p-2.5 rounded-lg bg-black/40 border border-white/5">
+                <p class="text-[10px] text-gray-500 mb-1">Preview:</p>
+                <pre id="txPreview" class="mono text-[10px] text-gray-400 overflow-x-auto">Connect wallet to preview...</pre>
+            </div>
+        </div>
+
+        <!-- Logs -->
+        <div class="card rounded-2xl p-5">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-sm font-semibold text-white">Logs</h2>
+                <button onclick="clearLogs()" class="text-[10px] text-gray-500">Clear</button>
+            </div>
+            <div id="logsContainer" class="max-h-64 overflow-y-auto mono text-xs space-y-1">
+                <div class="log-entry info text-gray-400">Ready. Connect wallet to begin.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- WalletConnect v2 Provider -->
+    <script type="module">
+        import { EthereumProvider } from "https://unpkg.com/@walletconnect/ethereum-provider@2.11.0/dist/index.es.js";
+
+        // ─── State ───
+        let provider = null;
+        let userAddress = null;
+        let chainId = null;
+        let capabilities = null;
+        let session = null;
+
+        // ─── Utils ───
+        const $ = id => document.getElementById(id);
+        const log = (msg, type = 'info') => {
+            const container = $('logsContainer');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type} text-gray-300`;
+            const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            entry.innerHTML = `<span class="text-gray-600">[${time}]</span> ${msg}`;
+            container.appendChild(entry);
+            container.scrollTop = container.scrollHeight;
+        };
+        const clearLogs = () => $('logsContainer').innerHTML = '';
+        const toggleSection = id => {
+            const content = $(id);
+            const chevron = $(id + 'Chevron');
+            content.classList.toggle('open');
+            if (chevron) chevron.classList.toggle('open');
+        };
+        const shorten = addr => addr ? addr.slice(0, 6) + '...' + addr.slice(-4) : '—';
+        const toHex = n => '0x' + BigInt(n).toString(16);
+
+        // ─── QR Code Generator (simple) ───
+        function generateQR(uri) {
+            // Use a simple QR API
+            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(uri)}`;
+            const img = document.createElement('img');
+            img.src = qrUrl;
+            img.width = 200;
+            img.height = 200;
+            img.alt = 'WalletConnect QR';
+            $('qrCode').innerHTML = '';
+            $('qrCode').appendChild(img);
+        }
+
+        // ─── Call Management ───
+        function addCallEntry(call = { to: '', value: '0', data: '0x' }) {
+            const id = Date.now() + Math.random();
+            const div = document.createElement('div');
+            div.className = 'p-3 rounded-lg bg-black/40 border border-white/5 space-y-2';
+            div.dataset.callId = id;
+            div.innerHTML = `
+                <div class="flex items-center justify-between">
+                    <span class="text-[10px] font-medium text-gray-500">Call</span>
+                    <button onclick="window.removeCall('${id}')" class="text-[10px] text-red-400">Remove</button>
+                </div>
+                <div class="space-y-2">
+                    <input type="text" class="call-to input-field w-full px-2.5 py-2 rounded-lg mono text-[11px] text-white" placeholder="Target: 0x..." value="${call.to}">
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="text" class="call-value input-field w-full px-2.5 py-2 rounded-lg mono text-[11px] text-white" placeholder="Value (wei)" value="${call.value}">
+                        <input type="text" class="call-data input-field w-full px-2.5 py-2 rounded-lg mono text-[11px] text-white" placeholder="Data: 0x..." value="${call.data}">
+                    </div>
+                </div>
+            `;
+            $('callsContainer').appendChild(div);
+            updatePreview();
+        }
+
+        window.removeCall = function(id) {
+            const el = document.querySelector(`[data-call-id="${id}"]`);
+            if (el) el.remove();
+            updatePreview();
+        };
+
+        function getCalls() {
+            const entries = $('callsContainer').children;
+            const result = [];
+            for (const entry of entries) {
+                result.push({
+                    to: entry.querySelector('.call-to').value,
+                    value: entry.querySelector('.call-value').value || '0',
+                    data: entry.querySelector('.call-data').value || '0x'
+                });
+            }
+            return result;
+        }
+
+        window.loadPreset = function(name) {
+            $('callsContainer').innerHTML = '';
+            const user = userAddress || '0x0000000000000000000000000000000000000000';
+
+            if (name === 'simple') {
+                addCallEntry({ to: user, value: '0', data: '0x' });
+            } else if (name === 'batchTransfer') {
+                addCallEntry({ to: user, value: '1000000000000', data: '0x' });
+                addCallEntry({ to: user, value: '1000000000000', data: '0x' });
+            } else if (name === 'approve') {
+                addCallEntry({
+                    to: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+                    value: '0',
+                    data: '0x095ea7b30000000000000000000000007a250d5630B4cF539739dF2C5dAcb4c659F2488Dffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
+                });
+            }
+            updatePreview();
+        };
+
+        function updatePreview() {
+            const calls = getCalls();
+            const preview = {
+                version: '1.0',
+                from: userAddress || '0x...',
+                calls: calls.map(c => ({ to: c.to, value: toHex(c.value), data: c.data })),
+                capabilities: capabilities || {}
+            };
+            $('txPreview').textContent = JSON.stringify(preview, null, 2);
+        }
+
+        // ─── Connect via WalletConnect ───
+        $('connectBtn').addEventListener('click', async () => {
+            log('Initializing WalletConnect v2...');
+            $('connectBtn').disabled = true;
+            $('connectBtn').textContent = 'Connecting...';
+
+            try {
+                provider = await EthereumProvider.init({
+                    projectId: 'eip7702_test_dapp', // Using a placeholder; in production get one from cloud.walletconnect.com
+                    chains: [1],
+                    methods: [
+                        'eth_sendTransaction',
+                        'eth_sign',
+                        'personal_sign',
+                        'eth_signTypedData',
+                        'eth_signTypedData_v4',
+                        'wallet_getCapabilities',
+                        'wallet_sendCalls',
+                        'wallet_getCallsStatus'
+                    ],
+                    events: ['chainChanged', 'accountsChanged'],
+                    showQrModal: false // We'll handle QR ourselves
+                });
+
+                log('Provider initialized. Requesting connection...');
+
+                // Listen for URI to show QR
+                provider.on('display_uri', (uri) => {
+                    log('QR code generated. Scan with MetaMask mobile.', 'info');
+                    $('qrSection').classList.remove('hidden');
+                    generateQR(uri);
+                    $('deepLink').href = `https://metamask.app.wc/?uri=${encodeURIComponent(uri)}`;
+                });
+
+                await provider.enable();
+
+                log('Wallet connected!', 'success');
+                $('qrSection').classList.add('hidden');
+
+                // Get account info
+                const accounts = provider.accounts;
+                userAddress = accounts[0];
+                chainId = provider.chainId;
+
+                // Get balance via provider
+                const balanceHex = await provider.request({
+                    method: 'eth_getBalance',
+                    params: [userAddress, 'latest']
+                });
+                const balance = (Number(balanceHex) / 1e18).toFixed(4);
+
+                // Update UI
+                $('walletAddress').textContent = userAddress;
+                $('walletChain').textContent = chainId === 1 ? 'Mainnet (1)' : `Chain ${chainId}`;
+                $('walletBalance').textContent = `${balance} ETH`;
+                $('connectionStatus').innerHTML = `<span class="status-dot connected"></span>Connected`;
+                $('walletInfo').classList.remove('hidden');
+                $('connectBtn').textContent = 'Connected';
+                $('connectBtn').classList.add('opacity-50');
+
+                log(`Address: ${shorten(userAddress)} | Balance: ${balance} ETH`, 'success');
+
+                // Enable buttons
+                $('checkCapsBtn').disabled = false;
+                $('sendCallsBtn').disabled = false;
+                $('sendRawBtn').disabled = false;
+
+                // Auto-check capabilities
+                await checkCapabilities();
+
+                if ($('callsContainer').children.length === 0) {
+                    loadPreset('simple');
+                }
+
+            } catch (err) {
+                log(`Connection failed: ${err.message}`, 'error');
+                console.error(err);
+                $('connectBtn').disabled = false;
+                $('connectBtn').textContent = 'Connect via WalletConnect';
+            }
+        });
+
+        // ─── Check Capabilities ───
+        async function checkCapabilities() {
+            if (!provider || !userAddress) return;
+            try {
+                log('Calling wallet_getCapabilities...');
+                const caps = await provider.request({
+                    method: 'wallet_getCapabilities',
+                    params: [userAddress]
+                });
+                capabilities = caps;
+
+                $('capsResult').classList.remove('hidden');
+                $('capsJson').textContent = JSON.stringify(caps, null, 2);
+
+                const chainKey = `0x${chainId.toString(16)}`;
+                const chainCaps = caps[chainKey] || caps[chainId.toString()] || {};
+                const has7702 = chainCaps.eip7702 || chainCaps.delegation || false;
+
+                $('wallet7702').textContent = has7702 ? '✅ Yes' : '❌ No';
+                $('wallet7702').className = has7702 ? 'mono text-green-400' : 'mono text-red-400';
+
+                if (has7702) {
+                    log('EIP-7702 supported!', 'success');
+                    const delegator = chainCaps.eip7702?.delegatorAddress;
+                    if (delegator) {
+                        log(`Suggested delegator: ${shorten(delegator)}`, 'info');
+                    }
+                } else {
+                    log('EIP-7702 not reported by wallet.', 'warn');
+                    log('This may still work if the wallet handles it internally.', 'info');
+                }
+
+            } catch (err) {
+                log(`Capabilities check failed: ${err.message}`, 'error');
+                $('wallet7702').textContent = '❌ Error';
+            }
+        }
+
+        $('checkCapsBtn').addEventListener('click', checkCapabilities);
+
+        // ─── Send Calls (EIP-5792) ───
+        $('sendCallsBtn').addEventListener('click', async () => {
+            if (!provider || !userAddress) { log('Connect wallet first', 'error'); return; }
+
+            const calls = getCalls();
+            if (calls.length === 0) { log('Add at least one call', 'error'); return; }
+
+            for (const call of calls) {
+                if (!call.to.match(/^0x[a-fA-F0-9]{40}$/)) {
+                    log(`Invalid address: ${call.to}`, 'error');
+                    return;
+                }
+            }
+
+            log('Preparing wallet_sendCalls...');
+            $('sendCallsBtn').disabled = true;
+            $('sendCallsBtn').textContent = 'Sending...';
+
+            try {
+                const request = {
+                    version: '1.0',
+                    from: userAddress,
+                    calls: calls.map(c => ({
+                        to: c.to,
+                        value: toHex(c.value),
+                        data: c.data
+                    }))
+                };
+
+                log(`Request: ${JSON.stringify(request, null, 2).substring(0, 500)}...`, 'info');
+
+                const result = await provider.request({
+                    method: 'wallet_sendCalls',
+                    params: [request]
+                });
+
+                log(`Submitted! ID: ${result}`, 'success');
+                log('Check MetaMask mobile for approval prompt.', 'info');
+
+                // Poll for status
+                pollCallsStatus(result);
+
+            } catch (err) {
+                log(`Send failed: ${err.message}`, 'error');
+                console.error(err);
+            } finally {
+                $('sendCallsBtn').disabled = false;
+                $('sendCallsBtn').textContent = 'Send wallet_sendCalls';
+            }
+        });
+
+        async function pollCallsStatus(id) {
+            log('Polling status...');
+            let attempts = 0;
+            const maxAttempts = 20;
+
+            const poll = async () => {
+                if (attempts >= maxAttempts) {
+                    log('Polling timed out. Check MetaMask for status.', 'warn');
+                    return;
+                }
+                attempts++;
+
+                try {
+                    const status = await provider.request({
+                        method: 'wallet_getCallsStatus',
+                        params: [id]
+                    });
+
+                    log(`Status: ${JSON.stringify(status).substring(0, 200)}`, 'info');
+
+                    if (status.status === 'CONFIRMED') {
+                        log('Confirmed!', 'success');
+                        if (status.receipts?.[0]?.transactionHash) {
+                            const hash = status.receipts[0].transactionHash;
+                            log(`<a href="https://etherscan.io/tx/${hash}" target="_blank" class="text-indigo-400 underline">Etherscan: ${shorten(hash)}</a>`, 'success');
+                        }
+                        return;
+                    } else if (status.status === 'FAILED') {
+                        log('Failed!', 'error');
+                        return;
+                    }
+
+                    setTimeout(poll, 4000);
+                } catch (err) {
+                    log(`Status error: ${err.message}`, 'error');
+                    setTimeout(poll, 6000);
+                }
+            };
+
+            poll();
+        }
+
+        // ─── Fallback: Raw Type 4 (Advanced) ───
+        $('sendRawBtn').addEventListener('click', async () => {
+            if (!provider || !userAddress) { log('Connect first', 'error'); return; }
+
+            log('Attempting raw Type 4 transaction...', 'warn');
+            log('This requires the wallet to support eth_sendTransaction with type 0x04', 'warn');
+
+            const delegator = $('delegatorAddress').value;
+            const calls = getCalls();
+
+            try {
+                // Try to send a standard transaction first to test connectivity
+                log('Testing with standard eth_sendTransaction...');
+
+                const tx = {
+                    from: userAddress,
+                    to: userAddress,
+                    value: '0x0',
+                    data: '0x',
+                    type: '0x4', // Type 4
+                    // authorizationList would need to be constructed here
+                };
+
+                log('Raw Type 4 not fully implemented in this demo.', 'warn');
+                log('Use wallet_sendCalls above for the supported path.', 'info');
+                log('If wallet_sendCalls fails, the wallet does not support EIP-7702 via WalletConnect yet.', 'warn');
+
+            } catch (err) {
+                log(`Raw tx failed: ${err.message}`, 'error');
+            }
+        });
+
+        // ─── Event Listeners ───
+        $('addCallBtn').addEventListener('click', () => addCallEntry());
+
+        // Initialize
+        addCallEntry();
+    </script>
+</body>
+  </html>
+  
