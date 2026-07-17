@@ -288,6 +288,7 @@
         let userAddress = null;
         let chainId = null;
         let capabilities = null;
+        let lastCallId = null;
 
         // ─── Utils ───
         const $ = id => document.getElementById(id);
@@ -360,10 +361,7 @@
                 const to = entry.querySelector('.call-to').value;
                 const value = entry.querySelector('.call-value').value || '0';
                 let data = entry.querySelector('.call-data').value || '';
-
-                // EIP-5792: data must be valid hex or omitted, not just "0x"
                 if (data === '0x') data = '';
-
                 result.push({ to, value, data });
             }
             return result;
@@ -424,7 +422,6 @@
                 const chainHex = await provider.request({ method: 'eth_chainId' });
                 chainId = parseInt(chainHex, 16);
 
-                // Get balance
                 let balance = '0.0000';
                 try {
                     const balanceHex = await provider.request({
@@ -436,7 +433,6 @@
                     log('Balance fetch failed', 'warn');
                 }
 
-                // Update UI
                 $('walletAddress').textContent = userAddress;
                 $('walletChain').textContent = chainId === 1 ? 'Mainnet (1)' : `Chain ${chainId}`;
                 $('walletBalance').textContent = `${balance} ETH`;
@@ -447,12 +443,10 @@
 
                 log(`Connected: ${shorten(userAddress)}`, 'success');
 
-                // Enable buttons
                 $('checkCapsBtn').disabled = false;
                 $('sendCallsBtn').disabled = false;
                 $('sendRawBtn').disabled = false;
 
-                // Auto-check capabilities
                 setTimeout(() => checkCapabilities(), 300);
 
                 if ($('callsContainer').children.length === 0) {
@@ -471,8 +465,6 @@
             if (!provider || !userAddress) return;
             try {
                 log('Calling wallet_getCapabilities...');
-
-                // EIP-5792 spec: params = [address, [chainIds]]
                 const chainHex = '0x' + chainId.toString(16);
                 const caps = await provider.request({
                     method: 'wallet_getCapabilities',
@@ -525,7 +517,6 @@
             $('sendCallsBtn').textContent = 'Sending...';
 
             try {
-                // CORRECT EIP-5792 format per spec
                 const chainHex = '0x' + chainId.toString(16);
 
                 const request = {
@@ -547,15 +538,26 @@
                     params: [request]
                 });
 
-                log(`Submitted! ID: ${result}`, 'success');
+                // FIX: Handle result as object or string
+                let resultId = result;
+                if (typeof result === 'object' && result !== null) {
+                    resultId = result.id || result.result || JSON.stringify(result);
+                    log(`Result object: ${JSON.stringify(result)}`, 'info');
+                }
 
-                pollCallsStatus(result);
+                lastCallId = resultId;
+                log(`Submitted! ID: ${resultId}`, 'success');
+                log('Approve the transaction in MetaMask.', 'info');
+
+                // Don't auto-poll if ID is weird - let user check manually
+                if (typeof resultId === 'string' && resultId.length > 5) {
+                    pollCallsStatus(resultId);
+                } else {
+                    log('ID format unclear. Check MetaMask transaction history.', 'warn');
+                }
 
             } catch (err) {
                 log(`Send failed: ${err.message}`, 'error');
-                if (err.message.includes('not supported') || err.message.includes('not found')) {
-                    log('wallet_sendCalls is not supported by this wallet.', 'warn');
-                }
             } finally {
                 $('sendCallsBtn').disabled = false;
                 $('sendCallsBtn').textContent = 'Send wallet_sendCalls';
@@ -563,13 +565,18 @@
         });
 
         async function pollCallsStatus(id) {
+            if (!id || typeof id !== 'string') {
+                log('Invalid ID for polling. Skipping.', 'warn');
+                return;
+            }
+
             log('Polling status...');
             let attempts = 0;
             const maxAttempts = 20;
 
             const poll = async () => {
                 if (attempts >= maxAttempts) {
-                    log('Polling timed out.', 'warn');
+                    log('Polling timed out. Check MetaMask for confirmation.', 'warn');
                     return;
                 }
                 attempts++;
@@ -586,7 +593,7 @@
                         log('Confirmed!', 'success');
                         if (status.receipts?.[0]?.transactionHash) {
                             const hash = status.receipts[0].transactionHash;
-                            log(`Etherscan: ${hash}`, 'success');
+                            log(`Etherscan: https://etherscan.io/tx/${hash}`, 'success');
                         }
                         return;
                     } else if (status.status === 400 || status.status === 500 || status.status === 'FAILED') {
@@ -597,6 +604,11 @@
                     setTimeout(poll, 4000);
                 } catch (err) {
                     log(`Status error: ${err.message}`, 'error');
+                    // Stop polling on persistent errors
+                    if (attempts > 5) {
+                        log('Too many errors. Stopping poll. Check MetaMask manually.', 'warn');
+                        return;
+                    }
                     setTimeout(poll, 6000);
                 }
             };
@@ -621,7 +633,6 @@
             $('sendRawBtn').textContent = 'Sending...';
 
             try {
-                // Get nonce
                 let nonce;
                 const manualNonce = $('authNonce').value;
                 if (manualNonce) {
@@ -699,5 +710,5 @@
         detectBrowser();
     </script>
 </body>
-            </html>
-                    
+    </html>
+    
