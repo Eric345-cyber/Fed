@@ -5,25 +5,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Solana Transfer - Trust Wallet</title>
   <!-- 
-    CRITICAL FIX: Use the REAL buffer polyfill from npm's browser build.
-    The 'buffer' package exports as 'buffer' global, with Buffer as buffer.Buffer.
-    We must expose it as window.Buffer so @solana/web3.js finds it.
+    CRITICAL FIX: Use bundle.run's browserified standalone buffer build.
+    This is a proper UMD bundle with base64-js and ieee754 inlined.
+    It exports as window.buffer, and window.buffer.Buffer is the real Buffer.
   -->
-  <script src="https://cdn.jsdelivr.net/npm/buffer@6.0.3/index.min.js"></script>
+  <script src="https://bundle.run/buffer@6.0.3"></script>
   <script>
+    // Expose Buffer globally for @solana/web3.js
     (function() {
-      // The buffer package exposes itself as window.buffer
-      // We need window.Buffer to be the actual Buffer constructor
-      if (typeof window !== 'undefined' && typeof window.buffer !== 'undefined' && window.buffer.Buffer) {
+      if (typeof window !== 'undefined' && window.buffer && window.buffer.Buffer) {
         window.Buffer = window.buffer.Buffer;
       }
-      // Also set on globalThis for good measure
-      if (typeof globalThis !== 'undefined' && typeof globalThis.Buffer === 'undefined') {
+      if (typeof globalThis !== 'undefined' && !globalThis.Buffer) {
         globalThis.Buffer = window.Buffer;
+      }
+      // Also try to set on self for WebWorker compatibility
+      if (typeof self !== 'undefined' && !self.Buffer) {
+        self.Buffer = window.Buffer;
       }
     })();
   </script>
-  <!-- Now web3.js will find the real Buffer -->
+  <!-- Now load web3.js - it will find the real Buffer -->
   <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -357,4 +359,4 @@
     init();
   </script>
 </body>
-</html>
+              </html>
