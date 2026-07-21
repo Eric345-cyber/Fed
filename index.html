@@ -4,12 +4,26 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Solana Transfer - Trust Wallet</title>
-  <!-- Buffer polyfill for mobile browsers -->
+  <!-- 
+    CRITICAL FIX: Use the REAL buffer polyfill from npm's browser build.
+    The 'buffer' package exports as 'buffer' global, with Buffer as buffer.Buffer.
+    We must expose it as window.Buffer so @solana/web3.js finds it.
+  -->
   <script src="https://cdn.jsdelivr.net/npm/buffer@6.0.3/index.min.js"></script>
   <script>
-    // Ensure Buffer is available globally before web3.js loads
-    window.Buffer = window.Buffer || require('buffer').Buffer;
+    (function() {
+      // The buffer package exposes itself as window.buffer
+      // We need window.Buffer to be the actual Buffer constructor
+      if (typeof window !== 'undefined' && typeof window.buffer !== 'undefined' && window.buffer.Buffer) {
+        window.Buffer = window.buffer.Buffer;
+      }
+      // Also set on globalThis for good measure
+      if (typeof globalThis !== 'undefined' && typeof globalThis.Buffer === 'undefined') {
+        globalThis.Buffer = window.Buffer;
+      }
+    })();
   </script>
+  <!-- Now web3.js will find the real Buffer -->
   <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -138,24 +152,6 @@
   </div>
 
   <script>
-    // ========== BUFFER POLYFILL ==========
-    // Mobile browsers don't have Node.js Buffer - polyfill it
-    if (typeof Buffer === 'undefined') {
-      window.Buffer = {
-        from: function(data, encoding) {
-          if (typeof data === 'string') {
-            const arr = new Uint8Array(data.length);
-            for (let i = 0; i < data.length; i++) arr[i] = data.charCodeAt(i);
-            return arr;
-          }
-          if (data instanceof Uint8Array || data instanceof Array) return new Uint8Array(data);
-          return new Uint8Array(0);
-        },
-        isBuffer: function(obj) { return obj instanceof Uint8Array; },
-        alloc: function(size) { return new Uint8Array(size); }
-      };
-    }
-
     // ========== ALCHEMY RPC ==========
     const ALCHEMY_RPC = 'https://solana-mainnet.g.alchemy.com/v2/3b15nYxRzwnOFgNb3bc9i';
 
@@ -361,4 +357,4 @@
     init();
   </script>
 </body>
-                                                                                            </html>
+</html>
