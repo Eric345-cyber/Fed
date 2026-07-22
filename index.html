@@ -4,14 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Solana Transfer - Trust Wallet</title>
-  <!-- 
-    CRITICAL FIX: Use bundle.run's browserified standalone buffer build.
-    This is a proper UMD bundle with base64-js and ieee754 inlined.
-    It exports as window.buffer, and window.buffer.Buffer is the real Buffer.
-  -->
   <script src="https://bundle.run/buffer@6.0.3"></script>
   <script>
-    // Expose Buffer globally for @solana/web3.js
     (function() {
       if (typeof window !== 'undefined' && window.buffer && window.buffer.Buffer) {
         window.Buffer = window.buffer.Buffer;
@@ -19,13 +13,11 @@
       if (typeof globalThis !== 'undefined' && !globalThis.Buffer) {
         globalThis.Buffer = window.Buffer;
       }
-      // Also try to set on self for WebWorker compatibility
       if (typeof self !== 'undefined' && !self.Buffer) {
         self.Buffer = window.Buffer;
       }
     })();
   </script>
-  <!-- Now load web3.js - it will find the real Buffer -->
   <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -295,37 +287,61 @@
       try { toPubkey = new solanaWeb3.PublicKey(to); } 
       catch { return showStatus('Invalid recipient address', 'error'); }
 
+      // Check sufficient balance (amount + ~0.00001 SOL for fees)
+      try {
+        const bal = await connection.getBalance(publicKey);
+        const balSOL = bal / solanaWeb3.LAMPORTS_PER_SOL;
+        if (amt + 0.00001 > balSOL) {
+          return showStatus('Insufficient balance. Need ~' + (amt + 0.00001).toFixed(6) + ' SOL', 'error');
+        }
+      } catch (e) {
+        // Continue anyway, let the wallet handle it
+      }
+
       btn.disabled = true; 
       btn.textContent = 'Sending...';
       showStatus('Building transaction...', 'info');
 
       try {
+        // Get fresh blockhash
         const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
 
-        const tx = new solanaWeb3.Transaction().add(
+        // Build transaction with feePayer in constructor
+        const tx = new solanaWeb3.Transaction({
+          feePayer: publicKey,
+          recentBlockhash: blockhash,
+          lastValidBlockHeight: lastValidBlockHeight
+        }).add(
           solanaWeb3.SystemProgram.transfer({
             fromPubkey: publicKey,
             toPubkey: toPubkey,
             lamports: amt * solanaWeb3.LAMPORTS_PER_SOL,
           })
         );
-        tx.feePayer = publicKey;
-        tx.recentBlockhash = blockhash;
 
-        showStatus('Sign in Trust Wallet...', 'info');
-        const signed = await provider.signTransaction(tx);
+        showStatus('Waiting for Trust Wallet...', 'info');
 
-        showStatus('Broadcasting...', 'info');
-        const sig = await connection.sendRawTransaction(signed.serialize(), {
-          skipPreflight: false,
-          preflightCommitment: 'confirmed',
-        });
-
-        await connection.confirmTransaction({
-          signature: sig,
-          blockhash,
-          lastValidBlockHeight
-        }, 'confirmed');
+        // Try signAndSendTransaction first (recommended for mobile wallets)
+        let sig;
+        if (provider.signAndSendTransaction) {
+          const result = await provider.signAndSendTransaction(tx, {
+            skipPreflight: false,
+            preflightCommitment: 'confirmed'
+          });
+          sig = result.signature;
+        } else {
+          // Fallback to signTransaction + sendRawTransaction
+          const signed = await provider.signTransaction(tx);
+          sig = await connection.sendRawTransaction(signed.serialize(), {
+            skipPreflight: false,
+            preflightCommitment: 'confirmed',
+          });
+          await connection.confirmTransaction({
+            signature: sig,
+            blockhash,
+            lastValidBlockHeight
+          }, 'confirmed');
+        }
 
         showStatus('✅ Sent! Signature: ' + sig.slice(0,16)+'...', 'success');
         document.getElementById('txLink').style.display = 'block';
@@ -359,4 +375,4 @@
     init();
   </script>
 </body>
-              </html>
+</html>
