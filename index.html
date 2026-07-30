@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TRON Transfer - Trust Wallet</title>
+  <title>TRON Transfer - Trust Wallet / TronLink</title>
   <script src="https://unpkg.com/tronweb@6.0.0/dist/TronWeb.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -48,6 +48,11 @@
     }
     .btn-primary:hover:not(:disabled) { opacity: 0.9; }
     .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-secondary {
+      background: #374151; color: #e5e7eb; border: none;
+      padding: 10px; border-radius: 8px; font-size: 13px;
+      width: 100%; cursor: pointer; margin-top: 8px;
+    }
     .btn-danger { 
       background: #7f1d1d; color: #fca5a5; border: none; 
       padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer;
@@ -71,12 +76,19 @@
     .status.error { background: #7f1d1d; color: #fca5a5; border: 1px solid #991b1b; }
     .status.success { background: #064e3b; color: #6ee7b7; border: 1px solid #059669; }
     .status.info { background: #1e3a5f; color: #93c5fd; border: 1px solid #3b82f6; }
+    .status.warn { background: #78350f; color: #fdba74; border: 1px solid #f59e0b; }
 
     .tx-link { margin-top: 12px; text-align: center; display: none; }
     .tx-link a { color: #FF060A; font-size: 13px; text-decoration: none; font-weight: 500; }
 
     .footer { margin-top: 24px; padding-top: 16px; border-top: 1px solid #374151; text-align: center; }
     .footer p { font-size: 11px; color: #6b7280; }
+
+    .debug-info {
+      margin-top: 12px; padding: 10px; background: #0f172a;
+      border-radius: 6px; font-size: 11px; color: #64748b;
+      font-family: monospace; word-break: break-all;
+    }
 
     .network-badge {
       display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;
@@ -97,12 +109,14 @@
       <div id="not-connected" style="text-align:center;">
         <p style="color:#9ca3af;font-size:14px;margin-bottom:12px;">Connect your TRON wallet</p>
         <button class="btn-primary" onclick="connectWallet()">Connect Wallet</button>
+        <button class="btn-secondary" onclick="showDebug()" style="margin-top:8px;">🔍 Detect Wallet</button>
       </div>
       <div id="connected" style="display:none;">
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <div>
             <p style="font-size:12px;color:#6b7280;">Connected</p>
             <p id="pubkey" style="font-size:14px;font-weight:600;font-family:monospace;color:#f3f4f6;">...</p>
+            <div id="wallet-type" style="font-size:11px;color:#6b7280;margin-top:2px;">--</div>
             <div id="network-badge" class="network-badge" style="display:none;">Mainnet</div>
           </div>
           <button class="btn-danger" onclick="disconnectWallet()">Disconnect</button>
@@ -132,166 +146,180 @@
       <a id="explorer" href="#" target="_blank">View on TronScan →</a>
     </div>
 
+    <div id="debug-panel" class="debug-info" style="display:none;"></div>
+
     <div class="footer">
       <p>Open this page inside Trust Wallet or TronLink dApp browser</p>
     </div>
   </div>
 
   <script>
-    // ─── CONFIG ───────────────────────────────────────────────────────────
-    const MAINNET_FULLNODE = 'https://api.trongrid.io';
-    const MAINNET_SOLIDITY = 'https://api.trongrid.io';
-    const MAINNET_EVENT    = 'https://api.trongrid.io';
+    // ═══════════════════════════════════════════════════════════════════════
+    //  TRON WALLET DETECTOR & TRANSFER
+    //  Handles: TronLink (modern + legacy), Trust Wallet, raw tronWeb
+    // ═══════════════════════════════════════════════════════════════════════
 
-    const SHASTA_FULLNODE  = 'https://api.shasta.trongrid.io';
-    const SHASTA_SOLIDITY  = 'https://api.shasta.trongrid.io';
-    const SHASTA_EVENT     = 'https://api.shasta.trongrid.io';
-
-    const NILE_FULLNODE    = 'https://nile.trongrid.io';
-    const NILE_SOLIDITY    = 'https://nile.trongrid.io';
-    const NILE_EVENT       = 'https://nile.trongrid.io';
-
-    // ─── STATE ────────────────────────────────────────────────────────────
-    let provider   = null;   // window.tron / TIP-6963 provider
-    let tronWeb    = null;   // TronWeb instance (injected or self-built)
+    let tronWeb    = null;   // TronWeb instance (the real workhorse)
     let publicKey  = null;   // Base58 address
+    let walletType = null;   // 'tronlink' | 'trustwallet' | 'raw-tronweb'
     let isTestnet  = false;
 
     // ─── INIT ─────────────────────────────────────────────────────────────
     function init() {
-      // TIP-6963: listen for wallet announcements (modern, non-polluting)
-      window.addEventListener('TIP6963:announceProvider', (e) => {
-        const info = e.detail?.info;
-        if (info && (info.name === 'TronLink' || info.name === 'TrustWallet')) {
-          provider = e.detail.provider;
-          console.log('TIP-6963 detected:', info.name);
-          // If already connected, auto-wire up
-          if (provider.tronWeb?.ready) {
-            wireProvider(provider);
-          }
-        }
-      });
-      window.dispatchEvent(new Event('TIP6963:requestProvider'));
-
-      // Legacy: check if window.tron already exists (immediate injection)
-      if (window.tron) {
-        provider = window.tron;
-        if (provider.tronWeb?.ready) {
-          wireProvider(provider);
-        }
-      }
-
-      // Legacy fallback: raw window.tronWeb (very old TronLink / TrustWallet)
-      if (!provider && window.tronWeb?.ready) {
+      // Try auto-connect if tronWeb is already live (Trust Wallet often injects it ready)
+      if (window.tronWeb && window.tronWeb.ready) {
+        walletType = 'raw-tronweb';
         tronWeb = window.tronWeb;
-        publicKey = tronWeb.defaultAddress.base58;
+        publicKey = tronWeb.defaultAddress?.base58;
         if (publicKey) {
           updateUI();
           fetchBalance();
+          showStatus('Auto-connected via injected TronWeb', 'success');
         }
       }
     }
 
-    // ─── PROVIDER DETECTION ───────────────────────────────────────────────
-    function getProvider() {
-      // 1. TIP-6963 provider (already captured in init)
-      if (provider) return provider;
-
-      // 2. window.tron (TronLink standard injection)
-      if (window.tron) return window.tron;
-
-      // 3. Trust Wallet namespace (some versions inject here)
-      if (window.trustwallet?.tron) return window.trustwallet.tron;
-
-      // 4. window.tronLink (older TronLink versions)
-      if (window.tronLink) return window.tronLink;
-
-      return null;
+    // ─── DETECT: Scan what's actually available ───────────────────────────
+    function detectWallet() {
+      const checks = {
+        'window.tron': typeof window.tron !== 'undefined',
+        'window.tron.isTronLink': window.tron?.isTronLink,
+        'window.tron.request': typeof window.tron?.request === 'function',
+        'window.tron.tronWeb': !!window.tron?.tronWeb,
+        'window.tronLink': typeof window.tronLink !== 'undefined',
+        'window.tronLink.request': typeof window.tronLink?.request === 'function',
+        'window.tronWeb': typeof window.tronWeb !== 'undefined',
+        'window.tronWeb.ready': window.tronWeb?.ready,
+        'window.tronWeb.defaultAddress': !!window.tronWeb?.defaultAddress,
+        'window.trustwallet': typeof window.trustwallet !== 'undefined',
+        'window.trustwallet.tron': !!window.trustwallet?.tron,
+      };
+      return checks;
     }
 
-    // ─── WIRE PROVIDER ────────────────────────────────────────────────────
-    async function wireProvider(prov) {
-      provider = prov;
-
-      // Set up event listeners
-      provider.on?.('accountsChanged', (accounts) => {
-        if (!accounts || accounts.length === 0) {
-          disconnectWallet();
-        } else {
-          publicKey = accounts[0];
-          updateUI();
-          fetchBalance();
-        }
-      });
-
-      provider.on?.('chainChanged', ({ chainId }) => {
-        isTestnet = (chainId === '0x94a9059e' || chainId === '0xcd8690dc');
-        updateNetworkBadge();
-        fetchBalance();
-      });
-
-      provider.on?.('disconnect', () => {
-        disconnectWallet();
-      });
-
-      // If already authorized, grab tronWeb
-      if (provider.tronWeb?.ready) {
-        tronWeb = provider.tronWeb;
-        publicKey = tronWeb.defaultAddress.base58;
-        updateUI();
-        await fetchBalance();
+    function showDebug() {
+      const checks = detectWallet();
+      const panel = document.getElementById('debug-panel');
+      let html = '<strong>Wallet Detection Results:</strong><br>';
+      for (const [k, v] of Object.entries(checks)) {
+        html += `• ${k}: <span style="color:${v ? '#22c55e' : '#ef4444'}">${v}</span><br>`;
       }
+      html += `<br>UserAgent: ${navigator.userAgent.slice(0, 60)}...`;
+      panel.innerHTML = html;
+      panel.style.display = 'block';
     }
 
-    // ─── CONNECT ──────────────────────────────────────────────────────────
+    // ─── CONNECT: Try every path until one works ──────────────────────────
     async function connectWallet() {
-      const prov = getProvider();
-      if (!prov) {
-        return showStatus('No TRON wallet found. Open in Trust Wallet or TronLink browser.', 'error');
-      }
+      hideStatus();
+      document.getElementById('debug-panel').style.display = 'none';
 
-      try {
-        showStatus('Connecting...', 'info');
-
-        // Modern TIP-1193 request pattern
-        const accounts = await prov.request({ method: 'eth_requestAccounts' });
-
-        if (!accounts || accounts.length === 0) {
-          throw new Error('No accounts returned');
-        }
-
-        publicKey = accounts[0];
-
-        // Wire up tronWeb from provider
-        if (prov.tronWeb) {
-          tronWeb = prov.tronWeb;
-        } else if (window.tronWeb?.ready) {
+      // ═══════════════════════════════════════════════════════════════════
+      // PATH 1: Trust Wallet / raw tronWeb (already injected & ready)
+      // ═══════════════════════════════════════════════════════════════════
+      if (window.tronWeb && window.tronWeb.ready) {
+        const addr = window.tronWeb.defaultAddress?.base58;
+        if (addr) {
           tronWeb = window.tronWeb;
-        }
-
-        await wireProvider(prov);
-        showStatus('Connected!', 'success');
-
-      } catch (e) {
-        if (e.code === 4001) {
-          showStatus('Connection rejected by user', 'error');
-        } else {
-          showStatus('Connection failed: ' + (e.message || e), 'error');
+          publicKey = addr;
+          walletType = 'trustwallet';
+          updateUI();
+          await fetchBalance();
+          showStatus('✅ Connected via Trust Wallet (tronWeb)', 'success');
+          return;
         }
       }
+
+      // ═══════════════════════════════════════════════════════════════════
+      // PATH 2: Modern TronLink — window.tron with request()
+      // ═══════════════════════════════════════════════════════════════════
+      if (window.tron && typeof window.tron.request === 'function') {
+        try {
+          showStatus('Requesting TronLink connection...', 'info');
+          const accounts = await window.tron.request({ method: 'eth_requestAccounts' });
+          if (accounts && accounts.length > 0) {
+            publicKey = accounts[0];
+            walletType = 'tronlink';
+            tronWeb = window.tron.tronWeb || window.tronWeb;
+            updateUI();
+            await fetchBalance();
+            showStatus('✅ Connected via TronLink', 'success');
+            return;
+          }
+        } catch (e) {
+          console.log('TronLink modern path failed:', e.message);
+          // Don't show error yet — try next path
+        }
+      }
+
+      // ═══════════════════════════════════════════════════════════════════
+      // PATH 3: Legacy TronLink — window.tronLink with tron_requestAccounts
+      // ═══════════════════════════════════════════════════════════════════
+      if (window.tronLink && typeof window.tronLink.request === 'function') {
+        try {
+          showStatus('Requesting legacy TronLink connection...', 'info');
+          const resp = await window.tronLink.request({ method: 'tron_requestAccounts' });
+          // Legacy returns { code: 200 } on success, not accounts array
+          if (resp && (resp.code === 200 || (resp.length && resp.length > 0))) {
+            walletType = 'tronlink-legacy';
+            tronWeb = window.tronLink.tronWeb || window.tronWeb;
+            publicKey = tronWeb?.defaultAddress?.base58;
+            if (!publicKey && resp.length) publicKey = resp[0];
+            if (publicKey) {
+              updateUI();
+              await fetchBalance();
+              showStatus('✅ Connected via TronLink (legacy)', 'success');
+              return;
+            }
+          }
+        } catch (e) {
+          console.log('TronLink legacy path failed:', e.message);
+        }
+      }
+
+      // ═══════════════════════════════════════════════════════════════════
+      // PATH 4: Trust Wallet namespace (some versions)
+      // ═══════════════════════════════════════════════════════════════════
+      if (window.trustwallet?.tron) {
+        try {
+          showStatus('Requesting Trust Wallet connection...', 'info');
+          const accounts = await window.trustwallet.tron.request({ method: 'eth_requestAccounts' });
+          if (accounts && accounts.length > 0) {
+            publicKey = accounts[0];
+            walletType = 'trustwallet';
+            tronWeb = window.trustwallet.tron.tronWeb || window.tronWeb;
+            updateUI();
+            await fetchBalance();
+            showStatus('✅ Connected via Trust Wallet', 'success');
+            return;
+          }
+        } catch (e) {
+          console.log('Trust Wallet namespace path failed:', e.message);
+        }
+      }
+
+      // ═══════════════════════════════════════════════════════════════════
+      // FALLBACK: Nothing worked
+      // ═══════════════════════════════════════════════════════════════════
+      showDebug();
+      showStatus(
+        'No compatible TRON wallet found. Open this page inside Trust Wallet dApp browser or TronLink.',
+        'error'
+      );
     }
 
     // ─── DISCONNECT ───────────────────────────────────────────────────────
     function disconnectWallet() {
-      provider = null;
       tronWeb = null;
       publicKey = null;
+      walletType = null;
 
       document.getElementById('not-connected').style.display = 'block';
       document.getElementById('connected').style.display = 'none';
       document.getElementById('form').style.opacity = '0.5';
       document.getElementById('form').style.pointerEvents = 'none';
       document.getElementById('network-badge').style.display = 'none';
+      document.getElementById('debug-panel').style.display = 'none';
       hideStatus();
       document.getElementById('txLink').style.display = 'none';
     }
@@ -306,6 +334,14 @@
       const pk = publicKey || '';
       document.getElementById('pubkey').textContent = 
         pk.length > 12 ? pk.slice(0,6) + '...' + pk.slice(-4) : pk;
+
+      const typeLabels = {
+        'tronlink': 'TronLink (modern)',
+        'tronlink-legacy': 'TronLink (legacy)',
+        'trustwallet': 'Trust Wallet',
+        'raw-tronweb': 'Injected TronWeb'
+      };
+      document.getElementById('wallet-type').textContent = typeLabels[walletType] || walletType || 'Unknown';
 
       updateNetworkBadge();
     }
@@ -349,7 +385,6 @@
         return showStatus('Fill all fields with valid values', 'error');
       }
 
-      // Basic TRON Base58 validation (starts with T, 34 chars)
       if (!/^T[a-zA-Z0-9]{33}$/.test(to)) {
         return showStatus('Invalid TRON address (must be Base58, starts with T)', 'error');
       }
@@ -363,10 +398,9 @@
       showStatus('Building transaction...', 'info');
 
       try {
-        // Build transfer transaction
-        // Amount in SUN (1 TRX = 1,000,000 SUN)
         const amountSun = tronWeb.toSun(amt);
 
+        // Build transfer
         const tx = await tronWeb.transactionBuilder.sendTrx(to, amountSun, publicKey);
 
         showStatus('Sign in wallet...', 'info');
@@ -397,10 +431,12 @@
 
       } catch (e) {
         let msg = e.message || String(e);
-        if (msg.includes('cancelled') || msg.includes('rejected') || msg.includes('User denied')) {
+        if (msg.includes('cancelled') || msg.includes('rejected') || msg.includes('User denied') || msg.includes('declined')) {
           msg = 'Transaction rejected by user';
         } else if (msg.includes('insufficient')) {
           msg = 'Insufficient balance for transaction + fees';
+        } else if (msg.includes('no permission')) {
+          msg = 'Wallet not authorized — try reconnecting';
         }
         showStatus('❌ ' + msg, 'error');
       } finally {
@@ -425,4 +461,4 @@
     init();
   </script>
 </body>
-</html>
+              </html>
